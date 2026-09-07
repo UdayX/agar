@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AGAR — typographic culture lab</title>
+<meta name="description" content="A petri dish in the browser. Grow simulated prokaryotes, fungi and protists on real Monod kinetics, run-and-tumble chemotaxis, adder division, mutation and senescence — inside your own letterforms or on an open dish. Feed it, poison it, light it, and export PNG, SVG, WebM or CSV." />
+<meta name="color-scheme" content="light" />
+<meta property="og:title" content="AGAR — typographic culture lab" />
+<meta property="og:description" content="Letterforms as growth medium. A microbiology playground for type." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23fafaf8'/%3E%3Crect x='3' y='3' width='26' height='26' fill='%23ccff00'/%3E%3Ccircle cx='11' cy='12' r='3' fill='%23111'/%3E%3Ccircle cx='20' cy='19' r='4.5' fill='%23111'/%3E%3Ccircle cx='21' cy='9' r='2' fill='%23111'/%3E%3C/svg%3E" />
+</head>
+<body>
+<a class="skip" href="#stage">Skip to the culture plate</a>
+
+<div id="app">
+  <header class="bar">
+    <div class="wordmark"><span>A</span>GAR</div>
+    <div class="seg" role="radiogroup" aria-label="Plate mode">
+      <label class="seg-opt"><input type="radio" name="mode" value="specimen" checked /><span>Specimen</span></label>
+      <label class="seg-opt"><input type="radio" name="mode" value="dish" /><span>Petri dish</span></label>
+    </div>
+    <p class="tagline" id="mode-note">Letterforms are the growth medium.</p>
+    <div class="spacer"></div>
+    <button class="btn" id="btn-share" type="button">Copy setup link</button>
+  </header>
+
+  <aside class="rail" id="rail-left" aria-label="Organism and parameters">
+    <section class="block">
+      <h2 class="block-head"><span class="idx">01</span> Organism</h2>
+      <div class="block-body">
+        <div class="org-grid" id="organisms" role="radiogroup" aria-label="Choose an organism"></div>
+        <p class="note" id="org-note"></p>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2 class="block-head"><span class="idx">02</span> Controls</h2>
+      <div class="block-body" id="basics"></div>
+    </section>
+
+    <details class="block">
+      <summary><span class="idx">03</span> Advanced parameters</summary>
+      <div class="block-body pad0" id="advanced"></div>
+    </details>
+
+    <details class="block" id="block-font">
+      <summary><span class="idx">04</span> Import typeface</summary>
+      <div class="block-body">
+        <label class="lab" for="font-file">Font file (.ttf, .otf, .woff, .woff2)</label>
+        <input type="file" id="font-file" accept=".ttf,.otf,.woff,.woff2,font/*" />
+        <div class="file-drop" id="font-drop">or drop a font here</div>
+        <p class="note" id="font-status">Using the system monospace face. Imported fonts stay on your machine — nothing is uploaded.</p>
+        <button class="btn" id="font-clear" type="button" disabled>Revert to system face</button>
+      </div>
+    </details>
+  </aside>
+
+  <main class="stage" id="stage" tabindex="-1">
+    <div class="readout" id="readout"></div>
+
+    <div class="toolbar">
+      <span class="tb-label" id="tools-label">Plate tool</span>
+      <div class="tools" id="tools" role="radiogroup" aria-labelledby="tools-label"></div>
+      <div class="tb-brush">
+        <span class="lab" id="brush-label">Brush</span>
+        <div id="brush-slot"></div>
+      </div>
+      <button class="btn small" id="btn-clear-light" type="button">Clear beacons</button>
+      <p class="tb-hint" id="tool-hint">Drag on the plate to paint nutrient.</p>
+    </div>
+
+    <div class="canvas-wrap">
+      <div class="resume" id="resume" hidden>
+        <p id="resume-text"></p>
+        <div class="btn-row">
+          <button class="btn primary" id="resume-yes" type="button">Resume culture</button>
+          <button class="btn" id="resume-no" type="button">Start fresh</button>
+        </div>
+      </div>
+      <canvas id="plate" role="img" aria-label="Culture plate. Simulation not started."></canvas>
+      <div class="probe" id="probe" hidden></div>
+    </div>
+
+    <div class="transport">
+      <button class="btn primary" id="btn-play" type="button" aria-pressed="false">Incubate</button>
+      <button class="btn" id="btn-step" type="button">Step</button>
+      <button class="btn" id="btn-reset" type="button">Reset</button>
+      <button class="btn" id="btn-reseed" type="button">New seed</button>
+      <div class="sep" aria-hidden="true"></div>
+      <button class="btn" id="btn-pulse" type="button">Antibiotic pulse</button>
+      <button class="btn" id="btn-lifespan" type="button" aria-pressed="false">Run full lifespan</button>
+      <div class="sep" aria-hidden="true"></div>
+      <span class="lab" id="rate-label">Rate</span>
+      <div class="scrub" id="rate-slot"></div>
+      <output id="rate-out">25 min/s</output>
+    </div>
+  </main>
+
+  <aside class="rail" id="rail-right" aria-label="Instruments, output and method">
+    <details class="block" open>
+      <summary><span class="idx">A</span> Experiments</summary>
+      <div class="block-body">
+        <div class="preset-list" id="presets" role="group" aria-label="Preset experiments"></div>
+      </div>
+    </details>
+
+    <details class="block" open>
+      <summary><span class="idx">B</span> Growth curve</summary>
+      <div class="block-body">
+        <canvas class="chart" id="chart-growth" role="img"
+                aria-label="Growth curve: population and remaining substrate over time."></canvas>
+        <div class="chart-legend">
+          <span><i></i>Population</span>
+          <span class="dash"><i></i>Substrate</span>
+        </div>
+        <p class="note">A closed plate gives the classic batch curve — lag, log, stationary, death (Monod 1949). Raise <b>Inflow</b> to make it a chemostat that never dies.</p>
+      </div>
+    </details>
+
+    <details class="block" open>
+      <summary><span class="idx">C</span> Evolution</summary>
+      <div class="block-body">
+        <canvas class="chart" id="chart-traits" role="img"
+                aria-label="Mean heritable traits over time: growth rate, swim speed and drug resistance."></canvas>
+        <div class="chart-legend">
+          <span><i></i>Growth</span>
+          <span class="dash"><i></i>Speed</span>
+          <span class="acid"><i></i>Resistance</span>
+        </div>
+        <p class="note">Nothing here is scripted. Traits drift by mutation at every division; whatever leaves more descendants takes over.</p>
+      </div>
+    </details>
+
+    <details class="block" open>
+      <summary><span class="idx">D</span> Lab log</summary>
+      <div class="block-body">
+        <ul class="milestones" id="milestones" aria-label="Observed events"></ul>
+        <ul id="log" aria-label="Simulation events"></ul>
+      </div>
+    </details>
+
+    <details class="block">
+      <summary><span class="idx">E</span> Colour</summary>
+      <div class="block-body">
+        <div class="themes" id="themes" role="group" aria-label="Colour schemes"></div>
+        <p class="note">Schemes set the three plate colours below; each one is still editable on its own.</p>
+      </div>
+    </details>
+
+    <details class="block" open>
+      <summary><span class="idx">F</span> Export</summary>
+      <div class="block-body">
+        <div class="btn-row">
+          <button class="btn" id="ex-png1" type="button">PNG 1×</button>
+          <button class="btn" id="ex-png2" type="button">PNG 2×</button>
+          <button class="btn" id="ex-png4" type="button">PNG 4×</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="ex-svg" type="button">SVG geometry</button>
+          <button class="btn rec" id="ex-webm" type="button" aria-pressed="false">Record WebM</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="ex-csv" type="button">Time series CSV</button>
+          <button class="btn" id="ex-json" type="button">Save preset</button>
+          <button class="btn" id="ex-load" type="button">Load preset</button>
+        </div>
+        <input type="file" id="preset-file" accept="application/json,.json" class="visually-hidden" />
+        <p class="note">SVG exports the cells as real geometry. Dithering is a raster process and has no vector equivalent, so the SVG is the culture, not the photograph of it.</p>
+      </div>
+    </details>
+
+    <details class="block">
+      <summary><span class="idx">G</span> Method &amp; sources</summary>
+      <div class="block-body">
+        <p class="note pad0">Every rule in the simulation traces to one of these. Where the model simplifies a paper, the entry says so.</p>
+        <ul class="refs" id="refs"></ul>
+      </div>
+    </details>
+
+    <details class="block">
+      <summary><span class="idx">H</span> Keyboard</summary>
+      <div class="block-body">
+        <p class="note pad0">
+          <kbd>Space</kbd> incubate / pause · <kbd>S</kbd> single step · <kbd>R</kbd> reset ·
+          <kbd>N</kbd> new seed · <kbd>P</kbd> antibiotic pulse · <kbd>E</kbd> export PNG ·
+          <kbd>D</kbd> cycle dither kernel · <kbd>1</kbd>–<kbd>6</kbd> pick a plate tool.
+        </p>
+        <p class="note">Shortcuts are ignored while typing. Every control is reachable with <kbd>Tab</kbd>; sliders take arrow keys, <kbd>Page</kbd>, <kbd>Home</kbd> and <kbd>End</kbd>.</p>
+      </div>
+    </details>
+  </aside>
+</div>
+
+<p class="visually-hidden" id="announce" role="status" aria-live="polite"></p>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

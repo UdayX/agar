@@ -1,0 +1,560 @@
+/** AGAR — wiring. */
+import './style.css';
+import { defaults, PRESETS, speciesById, type Mode, type Params } from './params';
+import { Sim, DEAD } from './sim';
+import { Renderer } from './render';
+import { buildControls, buildOrganisms, buildPresets, buildReadout, buildRefs, buildThemes, buildTools, buildMilestones, renderLog } from './ui';
+import { Slider } from './slider';
+import { drawGrowth, drawTraits } from './charts';
+import * as X from './export';
+import { importFont, clearImportedFont, hasImportedFont, importedFontName } from './glyph';
+
+const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+const P: Params = { ...defaults, ...(X.readURL() ?? {}) };
+
+const canvas = $<HTMLCanvasElement>('plate');
+const renderer = new Renderer(canvas);
+const sim = new Sim();
+const recorder = new X.Recorder();
+const announce = $('announce');
+const probe = $('probe');
+
+const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+let running = false;
+let lifespanRun = false;
+let activePreset = 'default';
+let lastPhase = '';
+
+const STRUCTURAL = new Set<keyof Params>([
+  'mode', 'text', 'fontSize', 'fontWeight', 'tracking', 'lineHeight',
+  'inoculum', 'seedDensity', 'species', 'seed', 'substrate',
+  'dishRichness', 'colonies',
+]);
+
+const TOOL_HINT: Record<string, string> = {
+  inspect: 'Hover a cell to read its genome and state.',
+  feed: 'Drag on the plate to paint nutrient. Motile cells will find it.',
+  toxin: 'Drag to paint antibiotic. Cells below their inherited MIC die; the rest flee the gradient.',
+  light: 'Click to drop a light beacon. Photoautotrophs feed on it and swim toward it.',
+  inoculate: 'Drag to add cells of the selected organism.',
+  scrape: 'Drag to scrape cells off the plate.',
+};
+
+const say = (msg: string): void => { announce.textContent = msg; };
+
+// ── layout ───────────────────────────────────────────────────────────────
+function plateSize(): [number, number] {
+  const wrap = canvas.parentElement as HTMLElement;
+  const w = Math.max(240, Math.floor(wrap.clientWidth - 36));
+  const h = Math.max(200, Math.floor(wrap.clientHeight - 36));
+  return [w, h];
+}
+
+function resetSim(): void {
+  const [w, h] = plateSize();
+  renderer.resize(w, h, P.pixelSize);
+  sim.reset(w, h, P);
+  lastPhase = '';
+  draw();
+  updateAll();
+}
+
+let resizeTimer = 0;
+new ResizeObserver(() => {
+  clearTimeout(resizeTimer);
+  resizeTimer = window.setTimeout(() => {
+    const [w, h] = plateSize();
+    if (Math.abs(w - renderer.w) < 2 && Math.abs(h - renderer.h) < 2) return;
+    resetSim();
+  }, 180);
+}).observe(canvas.parentElement as HTMLElement);
+
+// ── palette drives the interface accent too ──────────────────────────────
+function applyAccent(): void {
+  document.documentElement.style.setProperty('--acid', P.acidColor);
+}
+
+// ── controls ─────────────────────────────────────────────────────────────
+function applySpecies(id: string): void {
+  const s = speciesById(id);
+  P.species = id;
+  P.doubling = s.doubling; P.ks = s.ks; P.maintenance = s.maintenance;
+  P.adhesion = s.adhesion; P.alignment = s.alignment; P.hayflick = s.hayflick;
+  P.lifespan = s.lifespan; P.runLength = 1;
+  P.asymmetry = s.shape === 'bud' ? 0.85 : 0;
+  $('org-note').textContent = s.note;
+}
+
+const panel = buildControls($('basics'), $('advanced'), P, (key, value) => {
+  (P as Record<string, unknown>)[key] = value;
+  if (key === 'species') applySpecies(String(value));
+  if (key === 'acidColor') applyAccent();
+  if (key === 'pixelSize') renderer.resize(renderer.w, renderer.h, P.pixelSize);
+  if (key === 'timeScale') { rate.set(P.timeScale); rateOut.textContent = `${P.timeScale} min/s`; }
+  if (key === 'drugDose') sim.drug = Math.max(sim.drug, Number(value));
+  if (STRUCTURAL.has(key)) resetSim();
+  else if (!running) draw();
+});
+
+const syncOrganisms = buildOrganisms($('organisms'), P, (id) => {
+  applySpecies(id);
+  panel.sync();
+  resetSim();
+  say(`${speciesById(id).label}. ${speciesById(id).note}`);
+});
+
+const syncTools = buildTools($('tools'), P, (id) => {
+  P.tool = id as Params['tool'];
+  renderer.cursor.tool = id;
+  $('tool-hint').textContent = TOOL_HINT[id] ?? '';
+  canvas.classList.toggle('painting', id !== 'inspect');
+  if (id !== 'inspect') probe.hidden = true;
+  if (!running) draw();
+});
+
+buildThemes($('themes'), (t) => {
+  P.paperColor = t.paper; P.inkColor = t.ink; P.acidColor = t.acid;
+  applyAccent(); panel.sync(); draw();
+  say(`Colour scheme: ${t.label}.`);
+});
+
+const syncPresets = buildPresets($('presets'), (id) => {
+  const preset = PRESETS.find((x) => x.id === id);
+  if (!preset) return;
+  const colours = { paperColor: P.paperColor, inkColor: P.inkColor, acidColor: P.acidColor };
+  Object.assign(P, defaults, colours);
+  applySpecies(preset.patch.species ?? defaults.species);
+  Object.assign(P, preset.patch);
+  activePreset = id;
+  syncPresets(activePreset);
+  syncOrganisms(P.species);
+  syncTools(P.tool);
+  setMode(P.mode, false);
+  panel.sync();
+  rate.set(P.timeScale);
+  rateOut.textContent = `${P.timeScale} min/s`;
+  resetSim();
+  say(`${preset.label} loaded. ${preset.note}`);
+});
+syncPresets(activePreset);
+buildRefs($('refs'));
+const syncMilestones = buildMilestones($('milestones'));
+
+const setReadout = buildReadout($('readout'), [
+  { key: 'phase', label: 'Phase', hot: true },
+  { key: 'time', label: 'Culture age' },
+  { key: 'pop', label: 'Population' },
+  { key: 'gen', label: 'Generation' },
+  { key: 'sub', label: 'Substrate' },
+  { key: 'died', label: 'Lysed' },
+  { key: 'spore', label: 'Spores' },
+  { key: 'sen', label: 'Senescent' },
+  { key: 'drug', label: 'Drug' },
+  { key: 'res', label: 'Mean MIC' },
+  { key: 'org', label: 'Organelles' },
+  { key: 'fps', label: 'Frames/s' },
+]);
+
+// ── mode ─────────────────────────────────────────────────────────────────
+function setMode(m: Mode, rebuild = true): void {
+  P.mode = m;
+  panel.setMode(m);
+  $('block-font').hidden = m !== 'specimen';
+  $('mode-note').textContent = m === 'dish'
+    ? 'An open plate. Seed it, feed it, and leave it to grow.'
+    : 'Letterforms are the growth medium.';
+  for (const r of document.querySelectorAll<HTMLInputElement>('input[name="mode"]')) r.checked = r.value === m;
+  if (rebuild) resetSim();
+}
+for (const r of document.querySelectorAll<HTMLInputElement>('input[name="mode"]')) {
+  r.addEventListener('change', () => { if (r.checked) { setMode(r.value as Mode); say($('mode-note').textContent ?? ''); } });
+}
+
+// ── transport ────────────────────────────────────────────────────────────
+const btnPlay = $<HTMLButtonElement>('btn-play');
+const btnLife = $<HTMLButtonElement>('btn-lifespan');
+const rateOut = $<HTMLOutputElement>('rate-out');
+
+const rate = new Slider({
+  min: 1, max: 400, step: 1, value: P.timeScale,
+  labelId: 'rate-label',
+  format: (v) => `${v} simulated minutes per second`,
+  onInput: (v) => { P.timeScale = v; rateOut.textContent = `${v} min/s`; panel.sync(); },
+});
+$('rate-slot').appendChild(rate.el);
+
+const brush = new Slider({
+  min: 8, max: 140, step: 1, value: P.brush,
+  labelId: 'brush-label',
+  format: (v) => `${v} pixel brush`,
+  onInput: (v) => { P.brush = v; renderer.cursor.r = v; if (!running) draw(); },
+});
+$('brush-slot').appendChild(brush.el);
+
+function setRunning(on: boolean): void {
+  running = on;
+  btnPlay.textContent = on ? 'Pause' : 'Incubate';
+  btnPlay.setAttribute('aria-pressed', String(on));
+  if (!on && lifespanRun) endLifespan('paused');
+}
+
+btnPlay.addEventListener('click', () => setRunning(!running));
+$('btn-step').addEventListener('click', () => { sim.step(1 / 30, P); draw(); updateAll(); });
+$('btn-reset').addEventListener('click', () => { resetSim(); say('Culture reset.'); });
+$('btn-reseed').addEventListener('click', () => {
+  P.seed = Math.floor(Math.random() * 99999999);
+  panel.sync(); resetSim(); say(`New seed ${P.seed}.`);
+});
+$('btn-pulse').addEventListener('click', () => {
+  P.drugDose = Math.max(P.drugDose, 1.2);
+  sim.drug = Math.max(sim.drug, 1.2);
+  panel.sync();
+  sim.log.push({ t: sim.t, kind: 'phase', text: 'antibiotic pulse · 1.2 MIC units across the whole plate' });
+  say('Antibiotic pulse administered. Sensitive cells will lyse; resistant lineages survive.');
+});
+$('btn-clear-light').addEventListener('click', () => { sim.clearBeacons(); if (!running) draw(); say('Beacons cleared.'); });
+
+btnLife.addEventListener('click', () => (lifespanRun ? endLifespan('stopped') : startLifespan()));
+
+let lifeStartedAt = 0;
+function startLifespan(): void {
+  resetSim();
+  lifespanRun = true;
+  lifeStartedAt = performance.now();
+  P.timeScale = Math.max(P.timeScale, 220);
+  rate.set(P.timeScale);
+  rateOut.textContent = `${P.timeScale} min/s`;
+  panel.sync();
+  btnLife.setAttribute('aria-pressed', 'true');
+  btnLife.textContent = 'Stop lifespan';
+  setRunning(true);
+  say('Running the full lifespan: lag, exponential, stationary, death.');
+}
+
+function endLifespan(reason: string): void {
+  if (!lifespanRun) return;
+  lifespanRun = false;
+  btnLife.setAttribute('aria-pressed', 'false');
+  btnLife.textContent = 'Run full lifespan';
+  const s = sim.stats();
+  sim.log.push({ t: sim.t, kind: 'phase', text: `lifespan run ${reason} · peak N=${sim.peakPop} · ${s.born} born · ${s.died} lysed` });
+  say(`Lifespan run ${reason}. Peak population ${sim.peakPop} at ${(sim.t / 60).toFixed(1)} culture hours, ${s.born} born, ${s.died} lysed.`);
+  if (reason !== 'paused') setRunning(false);
+}
+
+// ── the plate is the instrument: pointer tools ───────────────────────────
+let painting = false;
+let lastPt: [number, number] | null = null;
+
+function toPlate(e: PointerEvent): [number, number] {
+  const r = canvas.getBoundingClientRect();
+  return [((e.clientX - r.left) / r.width) * renderer.w, ((e.clientY - r.top) / r.height) * renderer.h];
+}
+
+function apply(x: number, y: number): void {
+  if (P.tool === 'inspect' || P.tool === 'light') return;
+  sim.paint(x, y, P.brush, P.tool, P.brushStrength, P);
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  const [x, y] = toPlate(e);
+  renderer.cursor.x = x; renderer.cursor.y = y; renderer.cursor.on = true;
+  if (P.tool === 'light') { sim.placeBeacon(x, y); if (!running) draw(); return; }
+  if (P.tool === 'inspect') return;
+  canvas.setPointerCapture(e.pointerId);
+  painting = true;
+  lastPt = [x, y];
+  apply(x, y);
+  if (!running) draw();
+  e.preventDefault();
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  const [x, y] = toPlate(e);
+  renderer.cursor.x = x; renderer.cursor.y = y; renderer.cursor.on = true;
+  if (painting) {
+    // Interpolate along the stroke so a fast drag paints a line, not dots.
+    if (lastPt) {
+      const [px, py] = lastPt;
+      const d = Math.hypot(x - px, y - py);
+      const steps = Math.min(24, Math.floor(d / (P.brush * 0.4)));
+      for (let i = 1; i <= steps; i++) apply(px + ((x - px) * i) / steps, py + ((y - py) * i) / steps);
+    }
+    apply(x, y);
+    lastPt = [x, y];
+  } else if (P.tool === 'inspect') {
+    showProbe(e, x, y);
+  }
+  if (!running) draw();
+});
+
+for (const ev of ['pointerup', 'pointercancel'] as const) {
+  canvas.addEventListener(ev, (e) => {
+    painting = false; lastPt = null;
+    canvas.releasePointerCapture?.((e as PointerEvent).pointerId);
+  });
+}
+canvas.addEventListener('pointerleave', () => { renderer.cursor.on = false; probe.hidden = true; });
+
+function showProbe(e: PointerEvent, x: number, y: number): void {
+  const c = sim.pick(x, y, 16);
+  if (!c) { probe.hidden = true; return; }
+  const state = c.state === DEAD ? 'lysed' : c.state === 1 ? 'senescent' : c.state === 3 ? 'spore' : 'alive';
+  probe.textContent =
+    `cell #${c.id} · ${state}\n` +
+    `generation ${c.gen} · ${c.divisions} divisions\n` +
+    `age ${(c.age / 60).toFixed(1)} h · size ${c.size.toFixed(2)}\n` +
+    `growth ${(c.mu * 100).toFixed(0)}% of max\n` +
+    `MIC ${c.g.resistance.toFixed(2)} · speed ×${c.g.speed.toFixed(2)}\n` +
+    `organelles ${c.organelles}`;
+  const wrap = canvas.parentElement as HTMLElement;
+  const wr = wrap.getBoundingClientRect();
+  probe.hidden = false;
+  probe.style.left = `${Math.min(wr.width - 250, e.clientX - wr.left + 14)}px`;
+  probe.style.top = `${Math.min(wr.height - 110, e.clientY - wr.top + 14)}px`;
+}
+
+// ── font import ──────────────────────────────────────────────────────────
+const fontStatus = $('font-status');
+const fontClear = $<HTMLButtonElement>('font-clear');
+const drop = $('font-drop');
+
+async function loadFont(file: File): Promise<void> {
+  try {
+    const name = await importFont(file);
+    fontStatus.textContent = `Culturing “${name}”. The file never leaves your machine.`;
+    fontClear.disabled = false;
+    resetSim();
+    say(`Typeface ${name} imported.`);
+  } catch {
+    fontStatus.textContent = 'That file could not be decoded as a font. Try .ttf, .otf, .woff or .woff2.';
+    say('Font import failed.');
+  }
+}
+
+$<HTMLInputElement>('font-file').addEventListener('change', (e) => {
+  const f = (e.target as HTMLInputElement).files?.[0];
+  if (f) loadFont(f);
+});
+fontClear.addEventListener('click', () => {
+  clearImportedFont();
+  fontClear.disabled = true;
+  fontStatus.textContent = 'Using the system monospace face.';
+  resetSim();
+});
+for (const ev of ['dragenter', 'dragover'] as const) {
+  drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); });
+}
+for (const ev of ['dragleave', 'drop'] as const) {
+  drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); });
+}
+drop.addEventListener('drop', (e) => {
+  const f = (e as DragEvent).dataTransfer?.files?.[0];
+  if (f) loadFont(f);
+});
+
+// ── export ───────────────────────────────────────────────────────────────
+const name = () => `agar-${P.species}-${X.stamp()}`;
+$('ex-png1').addEventListener('click', () => X.exportPNG(canvas, 1, name()));
+$('ex-png2').addEventListener('click', () => X.exportPNG(canvas, 2, name()));
+$('ex-png4').addEventListener('click', () => X.exportPNG(canvas, 4, name()));
+$('ex-svg').addEventListener('click', () => X.exportSVG(sim, P, renderer.w, renderer.h, name()));
+$('ex-csv').addEventListener('click', () => X.exportCSV(sim, name()));
+$('ex-json').addEventListener('click', () => X.exportPreset(P, name()));
+
+const presetFile = $<HTMLInputElement>('preset-file');
+$('ex-load').addEventListener('click', () => presetFile.click());
+presetFile.addEventListener('change', async (e) => {
+  const f = (e.target as HTMLInputElement).files?.[0];
+  if (!f) return;
+  try {
+    Object.assign(P, await X.importPreset(f));
+    applyAccent(); syncOrganisms(P.species); syncTools(P.tool);
+    setMode(P.mode, false); panel.sync(); rate.set(P.timeScale); resetSim();
+    say('Preset loaded.');
+  } catch { say('That preset could not be read.'); }
+});
+
+const btnRec = $<HTMLButtonElement>('ex-webm');
+btnRec.addEventListener('click', () => {
+  if (recorder.active) {
+    recorder.stop(name());
+    btnRec.textContent = 'Record WebM';
+    btnRec.setAttribute('aria-pressed', 'false');
+    say('Recording saved.');
+  } else if (recorder.start(canvas)) {
+    btnRec.textContent = 'Stop recording';
+    btnRec.setAttribute('aria-pressed', 'true');
+    if (!running) setRunning(true);
+    say('Recording.');
+  } else {
+    say('This browser cannot record WebM. Export PNGs instead.');
+  }
+});
+
+$('btn-share').addEventListener('click', async () => {
+  const url = X.shareURL(P);
+  history.replaceState(null, '', url);
+  try { await navigator.clipboard.writeText(url); say('Setup link copied to the clipboard.'); }
+  catch { say('Setup link is now in the address bar.'); }
+});
+
+// ── leaving a culture to grow ────────────────────────────────────────────
+const STORE = 'agar.culture.v1';
+
+function saveCulture(): void {
+  try {
+    localStorage.setItem(STORE, JSON.stringify({ at: Date.now(), t: sim.t, params: P }));
+  } catch { /* private mode, or the quota is full — the plate is not worth an error */ }
+}
+
+/**
+ * Cultures keep growing while the tab is closed. Rather than serialising every
+ * cell, the run is deterministic: same seed, same parameters, same result. We
+ * store the parameters and fast-forward by the time that actually passed.
+ */
+function offerResume(): void {
+  let saved: { at: number; t: number; params: Partial<Params> } | null = null;
+  try { saved = JSON.parse(localStorage.getItem(STORE) ?? 'null'); } catch { saved = null; }
+  if (!saved || !saved.params) return;
+  const awayMin = (Date.now() - saved.at) / 60000;
+  if (awayMin < 1 || awayMin > 60 * 24 * 14) return;
+
+  const banner = $('resume');
+  const grown = Math.min(awayMin * (saved.params.timeScale ?? 25) * 60, 60 * 96);
+  $('resume-text').textContent =
+    `A culture was left incubating ${awayMin < 60 ? `${Math.round(awayMin)} minutes` : `${(awayMin / 60).toFixed(1)} hours`} ago. ` +
+    `Resuming will grow it forward by about ${(grown / 60).toFixed(0)} culture hours.`;
+  banner.hidden = false;
+
+  $('resume-no').addEventListener('click', () => { banner.hidden = true; localStorage.removeItem(STORE); });
+  $('resume-yes').addEventListener('click', () => {
+    banner.hidden = true;
+    Object.assign(P, saved!.params);
+    applyAccent(); syncOrganisms(P.species); syncTools(P.tool);
+    setMode(P.mode, false); panel.sync(); rate.set(P.timeScale);
+    resetSim();
+    // Fast-forward with a coarse step; capped so the tab never locks up.
+    const perStep = P.timeScale / 30;
+    const steps = Math.min(6000, Math.max(0, Math.round(grown / Math.max(0.01, perStep))));
+    for (let i = 0; i < steps; i++) sim.step(1 / 30, P);
+    draw(); updateAll();
+    say(`Culture resumed at ${(sim.t / 60).toFixed(1)} culture hours, population ${sim.stats().pop}.`);
+  });
+}
+
+addEventListener('visibilitychange', () => { if (document.hidden) saveCulture(); });
+addEventListener('pagehide', saveCulture);
+setInterval(saveCulture, 20000);
+
+// ── keyboard ─────────────────────────────────────────────────────────────
+const KERNELS = ['bayer2', 'bayer4', 'bayer8', 'floyd', 'atkinson', 'jarvis', 'noise', 'halftone', 'none'] as const;
+const TOOLS = ['inspect', 'feed', 'toxin', 'light', 'inoculate', 'scrape'] as const;
+addEventListener('keydown', (e) => {
+  const el = document.activeElement;
+  if (el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.getAttribute('role') === 'slider')) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const n = Number(e.key);
+  if (n >= 1 && n <= 6) { const t = TOOLS[n - 1]; syncTools(t); P.tool = t; renderer.cursor.tool = t; $('tool-hint').textContent = TOOL_HINT[t]; say(`Tool: ${t}.`); return; }
+  switch (e.key.toLowerCase()) {
+    case ' ': e.preventDefault(); setRunning(!running); break;
+    case 's': sim.step(1 / 30, P); draw(); updateAll(); break;
+    case 'r': resetSim(); say('Culture reset.'); break;
+    case 'n': $('btn-reseed').click(); break;
+    case 'p': $('btn-pulse').click(); break;
+    case 'e': X.exportPNG(canvas, 2, name()); say('PNG exported.'); break;
+    case 'd': {
+      const i = (KERNELS.indexOf(P.dither as typeof KERNELS[number]) + 1) % KERNELS.length;
+      P.dither = KERNELS[i];
+      panel.sync(); draw();
+      say(`Dither kernel: ${P.dither}.`);
+      break;
+    }
+  }
+});
+
+// ── loop ─────────────────────────────────────────────────────────────────
+let last = performance.now();
+let fps = 60, uiTimer = 0;
+
+function draw(): void { renderer.draw(sim, P); }
+
+function updateAll(): void {
+  const s = sim.stats();
+  setReadout({
+    phase: sim.phase.toUpperCase(),
+    time: `${(sim.t / 60).toFixed(1)} h`,
+    pop: String(s.pop),
+    gen: s.generation.toFixed(1),
+    sub: s.substrate.toFixed(3),
+    died: String(s.died),
+    spore: String(s.spores),
+    sen: String(s.senescent),
+    drug: sim.drug.toFixed(2),
+    res: s.meanRes.toFixed(3),
+    org: String(s.organelles),
+    fps: fps.toFixed(0),
+  });
+  drawGrowth($<HTMLCanvasElement>('chart-growth'), sim);
+  drawTraits($<HTMLCanvasElement>('chart-traits'), sim);
+  renderLog($('log'), sim.log);
+  syncMilestones(sim.milestones);
+  const sp = speciesById(P.species);
+  canvas.setAttribute('aria-label',
+    `${P.mode === 'dish' ? 'Petri dish' : 'Culture plate'}. ${s.pop} cells of ${sp.label}, ${sp.kingdom}. ` +
+    `${sim.phase} phase at ${(sim.t / 60).toFixed(1)} culture hours. ${s.died} lysed, ${s.spores} dormant, ` +
+    `mean generation ${s.generation.toFixed(1)}.` +
+    (P.mode === 'specimen' ? ` Specimen text: ${P.text.replace(/\n/g, ' ')}.` : ''));
+  if (sim.phase !== lastPhase) {
+    lastPhase = sim.phase;
+    say(`${sim.phase} phase at ${(sim.t / 60).toFixed(1)} culture hours, population ${s.pop}.`);
+  }
+}
+
+function tick(now: number): void {
+  const dt = Math.min(1 / 20, Math.max(1 / 240, (now - last) / 1000));
+  last = now;
+  fps = fps * 0.9 + (1 / dt) * 0.1;
+
+  if (running && P.view !== 'plate') {
+    sim.step(dt, P);
+    if (lifespanRun) {
+      const alive = sim.stats().pop;
+      const done = alive === 0 ||
+        (sim.phase === 'death' && alive < Math.max(2, sim.peakPop * 0.03)) ||
+        now - lifeStartedAt > 180_000;
+      if (done) endLifespan(alive === 0 ? 'complete — culture extinct' : 'complete');
+    }
+    draw();
+  }
+
+  uiTimer += dt;
+  if (uiTimer > 0.25) { uiTimer = 0; updateAll(); }
+  requestAnimationFrame(tick);
+}
+
+// A slider inside a closed <details> has no width, so its handle cannot be
+// placed until the section opens. Same on any layout change.
+function reflowAll(): void { panel.reflow(); rate.reflow(); brush.reflow(); }
+for (const d of document.querySelectorAll('details')) d.addEventListener('toggle', reflowAll);
+addEventListener('resize', reflowAll);
+
+// Handle for the console: inspect or drive the culture directly.
+(window as unknown as Record<string, unknown>).AGAR = { sim, P, renderer, step: (dt: number) => sim.step(dt, P) };
+
+// ── boot ─────────────────────────────────────────────────────────────────
+applyAccent();
+applySpecies(P.species);
+syncTools(P.tool);
+setMode(P.mode, false);
+panel.sync();
+resetSim();
+panel.reflow();
+rate.reflow();
+brush.reflow();
+requestAnimationFrame(tick);
+offerResume();
+if (!reduced.matches) setRunning(true);
+else say('Reduced motion is on, so the culture starts paused. Press Incubate or Space to begin.');
+if (hasImportedFont()) fontStatus.textContent = `Culturing “${importedFontName()}”.`;
