@@ -25,9 +25,16 @@
     <button class="btn" id="btn-share" type="button">Copy setup link</button>
   </header>
 
-  <aside class="rail" id="rail-left" aria-label="Organism and parameters">
+  <aside class="rail" id="rail-left" aria-label="Experiments and parameters">
+    <details class="block" open>
+      <summary><span class="idx">01</span> Experiments</summary>
+      <div class="block-body">
+        <div class="preset-list" id="presets" role="group" aria-label="Preset experiments"></div>
+      </div>
+    </details>
+
     <section class="block">
-      <h2 class="block-head"><span class="idx">01</span> Organism</h2>
+      <h2 class="block-head"><span class="idx">02</span> Organism</h2>
       <div class="block-body">
         <div class="org-grid" id="organisms" role="radiogroup" aria-label="Choose an organism"></div>
         <p class="note" id="org-note"></p>
@@ -35,17 +42,25 @@
     </section>
 
     <section class="block">
-      <h2 class="block-head"><span class="idx">02</span> Controls</h2>
+      <h2 class="block-head"><span class="idx">03</span> Controls</h2>
       <div class="block-body" id="basics"></div>
     </section>
 
     <details class="block">
-      <summary><span class="idx">03</span> Advanced parameters</summary>
+      <summary><span class="idx">04</span> Advanced parameters</summary>
       <div class="block-body pad0" id="advanced"></div>
     </details>
 
+    <details class="block">
+      <summary><span class="idx">05</span> Colour scheme</summary>
+      <div class="block-body">
+        <div class="themes" id="themes" role="group" aria-label="Colour schemes"></div>
+        <p class="note">A scheme sets the three plate colours in Controls above; each stays editable on its own.</p>
+      </div>
+    </details>
+
     <details class="block" id="block-font">
-      <summary><span class="idx">04</span> Import typeface</summary>
+      <summary><span class="idx">06</span> Import typeface</summary>
       <div class="block-body">
         <label class="lab" for="font-file">Font file (.ttf, .otf, .woff, .woff2)</label>
         <input type="file" id="font-file" accept=".ttf,.otf,.woff,.woff2,font/*" />
@@ -97,16 +112,9 @@
     </div>
   </main>
 
-  <aside class="rail" id="rail-right" aria-label="Instruments, output and method">
+  <aside class="rail" id="rail-right" aria-label="Instruments and output">
     <details class="block" open>
-      <summary><span class="idx">A</span> Experiments</summary>
-      <div class="block-body">
-        <div class="preset-list" id="presets" role="group" aria-label="Preset experiments"></div>
-      </div>
-    </details>
-
-    <details class="block" open>
-      <summary><span class="idx">B</span> Growth curve</summary>
+      <summary><span class="idx">A</span> Growth curve</summary>
       <div class="block-body">
         <canvas class="chart" id="chart-growth" role="img"
                 aria-label="Growth curve: population and remaining substrate over time."></canvas>
@@ -119,7 +127,7 @@
     </details>
 
     <details class="block" open>
-      <summary><span class="idx">C</span> Evolution</summary>
+      <summary><span class="idx">B</span> Evolution</summary>
       <div class="block-body">
         <canvas class="chart" id="chart-traits" role="img"
                 aria-label="Mean heritable traits over time: growth rate, swim speed and drug resistance."></canvas>
@@ -133,23 +141,15 @@
     </details>
 
     <details class="block" open>
-      <summary><span class="idx">D</span> Lab log</summary>
+      <summary><span class="idx">C</span> Lab log</summary>
       <div class="block-body">
         <ul class="milestones" id="milestones" aria-label="Observed events"></ul>
         <ul id="log" aria-label="Simulation events"></ul>
       </div>
     </details>
 
-    <details class="block">
-      <summary><span class="idx">E</span> Colour</summary>
-      <div class="block-body">
-        <div class="themes" id="themes" role="group" aria-label="Colour schemes"></div>
-        <p class="note">Schemes set the three plate colours below; each one is still editable on its own.</p>
-      </div>
-    </details>
-
     <details class="block" open>
-      <summary><span class="idx">F</span> Export</summary>
+      <summary><span class="idx">D</span> Export</summary>
       <div class="block-body">
         <div class="btn-row">
           <button class="btn" id="ex-png1" type="button">PNG 1×</button>
@@ -171,26 +171,44 @@
     </details>
 
     <details class="block">
-      <summary><span class="idx">G</span> Method &amp; sources</summary>
-      <div class="block-body">
-        <p class="note pad0">Every rule in the simulation traces to one of these. Where the model simplifies a paper, the entry says so.</p>
-        <ul class="refs" id="refs"></ul>
-      </div>
-    </details>
-
-    <details class="block">
-      <summary><span class="idx">H</span> Keyboard</summary>
+      <summary><span class="idx">E</span> Keyboard</summary>
       <div class="block-body">
         <p class="note pad0">
           <kbd>Space</kbd> incubate / pause · <kbd>S</kbd> single step · <kbd>R</kbd> reset ·
           <kbd>N</kbd> new seed · <kbd>P</kbd> antibiotic pulse · <kbd>E</kbd> export PNG ·
           <kbd>D</kbd> cycle dither kernel · <kbd>1</kbd>–<kbd>6</kbd> pick a plate tool.
         </p>
+        <p class="note"><a href="#credits">Sources and credits</a> are at the foot of the page.</p>
         <p class="note">Shortcuts are ignored while typing. Every control is reachable with <kbd>Tab</kbd>; sliders take arrow keys, <kbd>Page</kbd>, <kbd>Home</kbd> and <kbd>End</kbd>.</p>
       </div>
     </details>
   </aside>
 </div>
+
+<footer class="foot" id="credits">
+  <div class="foot-grid">
+    <section class="foot-about">
+      <h2>AGAR</h2>
+      <p>A typographic culture lab. Letterforms, or an open petri dish, as growth medium for
+      simulated prokaryotes, fungi and protists — grown on published kinetics and rendered
+      through a dither pipeline.</p>
+      <p class="foot-links">
+        <a href="https://udaymadethis.com/" target="_blank" rel="noopener noreferrer">udaymadethis.com</a>
+        <a href="https://github.com/UdayX/agar" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
+        <span>MIT licence</span>
+      </p>
+      <p class="note">Built by Uday. Fonts you import stay on your own machine — nothing is uploaded.</p>
+    </section>
+
+    <section class="foot-refs">
+      <h2>The research this is built on</h2>
+      <p class="note pad0">Every rule in the simulation traces to one of these papers. Where the
+      model simplifies or scales a published result, the entry says so. Citations are given in
+      full; none of this work is mine, and none of the authors are affiliated with this project.</p>
+      <ol class="refs" id="refs"></ol>
+    </section>
+  </div>
+</footer>
 
 <p class="visually-hidden" id="announce" role="status" aria-live="polite"></p>
 <script type="module" src="/src/main.ts"></script>

@@ -227,7 +227,7 @@ export const CONTROLS: Control[] = [
   { modes: ['specimen'], key: 'text', group: 'Specimen', label: 'Inoculated text', kind: 'text', level: 'basic',
     help: 'The letterforms are the growth medium. Substrate is laid inside the glyphs; the colony eats the type.' },
   { modes: ['specimen'], key: 'fontSize', group: 'Specimen', label: 'Type size', kind: 'range', min: 40, max: 420, step: 1, unit: 'px', level: 'basic',
-    help: 'Cap height of the specimen in device pixels.' },
+    help: 'Cap height of the specimen in device pixels. It is scaled down automatically if it would not fit the plate.' },
   { modes: ['specimen'], key: 'seedDensity', group: 'Specimen', label: 'Inoculum density', kind: 'range', min: 0.02, max: 1, step: 0.01, level: 'basic',
     help: 'Fraction of sites seeded at t=0. A thin inoculum gives a long lag phase and a much longer exponential run.' },
   { modes: ['specimen'], key: 'fontWeight', group: 'Specimen', label: 'Weight', kind: 'range', min: 100, max: 900, step: 100, level: 'advanced',

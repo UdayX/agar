@@ -108,10 +108,13 @@ export class Slider {
     return Math.min(max, Math.max(min, Number(snapped.toFixed(6))));
   }
 
+  /** Thumb width comes from CSS — it grows on coarse pointers. */
+  private tw(): number { return this.thumb.offsetWidth || 11; }
+
   private paint(t: number): void {
     const w = this.el.clientWidth || 1;
     this.fill.style.transform = `scaleX(${Math.max(0, Math.min(1, t))})`;
-    this.thumb.style.transform = `translate3d(${t * (w - 11)}px, -50%, 0)`;
+    this.thumb.style.transform = `translate3d(${t * (w - this.tw())}px, -50%, 0)`;
   }
 
   private aria(): void {
@@ -139,9 +142,10 @@ export class Slider {
   }
 
   private tFromEvent(e: PointerEvent, useGrab: boolean): number {
+    const tw = this.tw();
     const r = this.el.getBoundingClientRect();
-    const x = e.clientX - r.left - (useGrab ? this.grabDx : 5.5);
-    return Math.min(1, Math.max(0, x / Math.max(1, r.width - 11)));
+    const x = e.clientX - r.left - (useGrab ? this.grabDx : tw / 2);
+    return Math.min(1, Math.max(0, x / Math.max(1, r.width - tw)));
   }
 
   private onDown = (e: PointerEvent): void => {
@@ -152,11 +156,12 @@ export class Slider {
 
     // Respect where the thumb was grabbed; snapping it to the pointer centre
     // breaks the illusion the moment you touch it.
+    const tw = this.tw();
     const r = this.el.getBoundingClientRect();
-    const thumbX = this.norm(this.value) * (r.width - 11);
+    const thumbX = this.norm(this.value) * (r.width - tw);
     const localX = e.clientX - r.left;
-    const onThumb = Math.abs(localX - (thumbX + 5.5)) <= 14;
-    this.grabDx = onThumb ? localX - thumbX : 5.5;
+    const onThumb = Math.abs(localX - (thumbX + tw / 2)) <= tw + 6;
+    this.grabDx = onThumb ? localX - thumbX : tw / 2;
 
     // A press away from the thumb is a jump: commit now, let the handle travel.
     this.commit(this.quantise(this.tFromEvent(e, true)), !onThumb);

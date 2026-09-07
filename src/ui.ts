@@ -169,12 +169,14 @@ export function buildControls(
 
   for (const c of CONTROLS.filter((x) => x.level === 'basic')) makeControl(c, basics);
 
-  GROUPS.forEach((group, gi) => {
+  // Nested groups carry no number — the outer sections already do, and a second
+  // sequence that skips whatever is hidden reads as a mistake.
+  GROUPS.forEach((group) => {
     const items = CONTROLS.filter((c) => c.group === group && c.level === 'advanced');
     if (!items.length) return;
     const block = document.createElement('details');
     block.className = 'block sub';
-    block.innerHTML = `<summary><span class="idx">${String(gi + 1).padStart(2, '0')}</span> ${group}</summary>`;
+    block.innerHTML = `<summary>${group}</summary>`;
     const body = document.createElement('div');
     body.className = 'block-body';
     block.appendChild(body);

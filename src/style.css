@@ -37,7 +37,8 @@ html, body {
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
-body { overflow: hidden; }
+/* The working area fills the viewport; the credits footer sits below it. */
+body { overflow-x: hidden; }
 
 .skip {
   position: absolute; left: 8px; top: -60px; z-index: 100;
@@ -66,6 +67,7 @@ body { overflow: hidden; }
   grid-template-areas: "head head head" "left stage right";
   height: 100dvh;
 }
+@supports not (height: 100dvh) { #app { height: 100vh; } }
 
 header.bar {
   grid-area: head;
@@ -242,7 +244,10 @@ button.btn.rec[aria-pressed="true"] { background: var(--ink); color: var(--paper
   overflow-x: auto; scrollbar-width: none;
 }
 .readout::-webkit-scrollbar { display: none; }
-.readout .cellstat { padding: 6px 12px; border-right: 1px solid var(--line); min-width: 80px; white-space: nowrap; }
+.readout .cellstat {
+  flex: 0 0 auto;                 /* flex children shrink below their content by default */
+  padding: 6px 13px; border-right: 1px solid var(--line); min-width: 80px; white-space: nowrap;
+}
 .readout .k { display: block; font-size: 9px; letter-spacing: 0.12em; color: var(--ink-3); text-transform: uppercase; }
 .readout .v { display: block; font-size: 12px; font-variant-numeric: tabular-nums; }
 .readout .v.hot { background: var(--acid); padding: 0 3px; }
@@ -357,26 +362,100 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
 }
 .file-drop.over { border-color: var(--ink); background: var(--acid-soft); color: var(--ink); }
 
+/* ── footer ────────────────────────────────────────────────────────────── */
+.foot {
+  border-top: 1px solid var(--line-2);
+  background: var(--panel);
+  padding: 32px var(--pad) 40px;
+}
+.foot-grid {
+  display: grid; gap: 28px 40px;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  max-width: 1400px; margin: 0 auto;
+}
+.foot h2 {
+  margin: 0 0 10px; font-size: 10px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+}
+.foot-about p { margin: 0 0 10px; font-size: 11px; line-height: 1.6; color: var(--ink-2); max-width: 42ch; }
+.foot-links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.foot-links a, .foot-links span {
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 5px 8px; border: 1px solid var(--line-2); color: var(--ink); text-decoration: none;
+  transition: background var(--fast) ease, border-color var(--fast) ease, transform var(--fast) var(--ease-out);
+}
+.foot-links a:hover { background: var(--acid); border-color: var(--ink); }
+.foot-links a:active { transform: scale(0.97); }
+.foot-links span { color: var(--ink-3); }
+
+.foot .refs {
+  columns: 2; column-gap: 40px;
+  margin: 12px 0 0; padding: 0; list-style: none;
+  counter-reset: ref;
+}
+.foot .refs li {
+  break-inside: avoid; page-break-inside: avoid;
+  padding: 0 0 12px; border: 0;
+  counter-increment: ref;
+}
+.foot .refs li::before {
+  content: counter(ref, decimal-leading-zero);
+  display: inline-block; margin-right: 6px;
+  color: var(--ink-3); font-variant-numeric: tabular-nums;
+}
+
 /* ── responsive ────────────────────────────────────────────────────────── */
+/* Below three columns the plate stays on top and the two rails sit side by
+   side, so parameters and instruments are still one scroll apart. */
 @media (max-width: 1180px) {
-  body { overflow: auto; }
+  #app {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto minmax(420px, 62dvh) auto;
+    grid-template-areas: "head head" "stage stage" "left right";
+    height: auto;
+  }
+  header.bar { flex-wrap: wrap; height: auto; padding: 8px var(--pad); row-gap: 6px; }
+  .tagline { display: none; }
+  #rail-left { border-right: 1px solid var(--line-2); }
+  #rail-left, #rail-right { border-top: 1px solid var(--line-2); border-left: 0; overflow: visible; }
+  main.stage { border-bottom: 1px solid var(--line-2); }
+  .canvas-wrap { padding: 12px; }
+  .org-grid { grid-template-columns: repeat(4, 1fr); }
+  .foot-grid { grid-template-columns: 1fr; }
+  .foot .refs { columns: 2; }
+}
+
+@media (max-width: 760px) {
   #app {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto auto;
+    grid-template-rows: auto minmax(360px, 56dvh) auto auto;
     grid-template-areas: "head" "stage" "left" "right";
-    height: auto; min-height: 100dvh;
   }
-  header.bar { flex-wrap: wrap; height: auto; padding: 8px var(--pad); }
-  .tagline { display: none; }
-  #rail-left, #rail-right { border: 0; border-top: 1px solid var(--line-2); }
-  main.stage { min-height: 68dvh; }
-  .canvas-wrap { padding: 10px; }
-  .org-grid { grid-template-columns: repeat(4, 1fr); }
+  #rail-left { border-right: 0; }
+  .org-grid { grid-template-columns: repeat(3, 1fr); }
+  .readout .cellstat { min-width: 0; padding: 6px 11px; }
+  .transport { gap: 5px; }
+  .transport .scrub { flex: 1 1 120px; max-width: none; }
+  .transport output { min-width: 58px; }
+  .foot .refs { columns: 1; }
+  .foot { padding: 24px var(--pad) 32px; }
 }
-@media (max-width: 620px) {
+
+@media (max-width: 520px) {
+  :root { --pad: 12px; }
   .org-grid { grid-template-columns: repeat(2, 1fr); }
   .toolbar { gap: 6px; }
   .tb-hint { display: none; }
+  .tb-brush { min-width: 0; flex: 1 1 120px; }
+  .wordmark { font-size: 12px; }
+  button.btn { padding: 8px 9px; }
+}
+
+/* Fingers need a bigger target than a 11 px square. */
+@media (pointer: coarse) {
+  .sl { height: 30px; }
+  .sl-thumb { width: 15px; height: 15px; }
+  .tool span, .seg-opt span { padding: 8px 12px; }
 }
 
 @media (hover: none) {

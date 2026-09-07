@@ -53,12 +53,25 @@ export function drawType(w: number, h: number, p: Params): HTMLCanvasElement {
   ctx.clearRect(0, 0, w, h);
 
   const lines = p.text.split('\n');
-  const size = p.fontSize;
-  ctx.font = `${p.fontWeight} ${size}px ${familyFor(p)}`;
+  const family = familyFor(p);
+  const setFont = (px: number) => {
+    ctx.font = `${p.fontWeight} ${px}px ${family}`;
+    (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${p.tracking * px}px`;
+  };
+
+  // Fit the specimen to the plate. A phone-width plate cannot hold 190px type,
+  // and a specimen running off the edge is not a specimen.
+  let size = p.fontSize;
+  setFont(size);
+  const widest = Math.max(1, ...lines.map((l) => ctx.measureText(l).width));
+  const maxW = w * 0.92;
+  const maxH = h * 0.9;
+  const fit = Math.min(1, maxW / widest, maxH / Math.max(1, lines.length * size * p.lineHeight));
+  if (fit < 1) { size = Math.max(8, size * fit); setFont(size); }
+
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#000';
-  (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${p.tracking * size}px`;
 
   const lh = size * p.lineHeight;
   const top = h / 2 - ((lines.length - 1) * lh) / 2;
