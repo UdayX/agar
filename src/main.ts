@@ -2,12 +2,14 @@
 import './style.css';
 import { defaults, PRESETS, speciesById, type Mode, type Params } from './params';
 import { Sim, DEAD } from './sim';
-import { Renderer } from './render';
+import { Renderer, hexToRGB } from './render';
 import { buildControls, buildOrganisms, buildPresets, buildReadout, buildRefs, buildThemes, buildTools, buildMilestones, renderLog } from './ui';
 import { Slider } from './slider';
 import { drawGrowth, drawTraits } from './charts';
 import * as X from './export';
 import { importFont, clearImportedFont, hasImportedFont, importedFontName } from './glyph';
+import { runBoot } from './loader';
+import logoUrl from './AgarLogo.svg';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -45,9 +47,14 @@ const say = (msg: string): void => { announce.textContent = msg; };
 
 // ── layout ───────────────────────────────────────────────────────────────
 function plateSize(): [number, number] {
+  // clientHeight includes padding, and the wrap reserves room at the bottom for
+  // the floating dock — read the real padding rather than assuming it.
   const wrap = canvas.parentElement as HTMLElement;
-  const w = Math.max(240, Math.floor(wrap.clientWidth - 36));
-  const h = Math.max(200, Math.floor(wrap.clientHeight - 36));
+  const cs = getComputedStyle(wrap);
+  const px = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  const py = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const w = Math.max(240, Math.floor(wrap.clientWidth - px));
+  const h = Math.max(180, Math.floor(wrap.clientHeight - py));
   return [w, h];
 }
 
@@ -544,6 +551,16 @@ addEventListener('resize', reflowAll);
 (window as unknown as Record<string, unknown>).AGAR = { sim, P, renderer, step: (dt: number) => sim.step(dt, P) };
 
 // ── boot ─────────────────────────────────────────────────────────────────
+$<HTMLImageElement>('logo').src = logoUrl;
+
+// The wordmark is colonised while the app wires itself up behind the overlay.
+const bootEl = document.getElementById('boot');
+if (bootEl) {
+  void runBoot(bootEl, {
+    paper: hexToRGB(P.paperColor), ink: hexToRGB(P.inkColor), acid: hexToRGB(P.acidColor),
+  });
+}
+
 applyAccent();
 applySpecies(P.species);
 syncTools(P.tool);
