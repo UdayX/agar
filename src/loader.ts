@@ -60,7 +60,7 @@ export async function runBoot(host: HTMLElement, o: BootOpts): Promise<void> {
 
   // ── size to the viewport, keeping the wordmark's own proportions ───────
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const aspect = (img.naturalWidth || 3318) / (img.naturalHeight || 468);
+  const aspect = (img.naturalWidth || 1822) / (img.naturalHeight || 258);
   const cssW = Math.min(720, Math.max(260, window.innerWidth * 0.58));
   const cssH = Math.round(cssW / aspect);
   canvas.style.width = `${cssW}px`;

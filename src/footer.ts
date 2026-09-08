@@ -70,7 +70,7 @@ export function runFooter(canvas: HTMLCanvasElement, o: FooterOpts): () => void 
     bctx = buf.getContext('2d', { willReadFrequently: true });
 
     // Fit the wordmark inside the band with a margin on every side.
-    const aspect = (img.naturalWidth || 3318) / (img.naturalHeight || 468);
+    const aspect = (img.naturalWidth || 1822) / (img.naturalHeight || 258);
     const mw = Math.min(gw * 0.86, gh * 0.66 * aspect);
     const mh = mw / aspect;
     const ox = (gw - mw) / 2;
