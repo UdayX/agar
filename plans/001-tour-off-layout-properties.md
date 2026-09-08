@@ -94,17 +94,33 @@ glides and resizes without a single Layout or Paint.
 .tour.is-out .tour-dim { opacity: 0; }
 ```
 
-`place()` sets the hole. The winding is: trace the full viewport clockwise, return
-to the origin, then trace the hole anticlockwise — an even-odd cut-out that works
-with the default `nonzero` fill rule because the two windings oppose.
+`place()` sets the hole: trace the outside, trace the hole, and let `evenodd`
+decide what is inside.
 
 ```ts
-const x0 = r.left - PAD, y0 = r.top - PAD;
-const x1 = r.right + PAD, y1 = r.bottom + PAD;
+const bw = dim.clientWidth, bh = dim.clientHeight;
+const cl = (v: number, max: number): number => (v < 0 ? 0 : v > max ? max : v);
+const x0 = cl(r.left - PAD, bw), y0 = cl(r.top - PAD, bh);
+const x1 = cl(r.right + PAD, bw), y1 = cl(r.bottom + PAD, bh);
 dim.style.clipPath =
-  `polygon(0 0, 0 100%, 100% 100%, 100% 0, 0 0, ` +
+  `polygon(evenodd, 0px 0px, ${bw}px 0px, ${bw}px ${bh}px, 0px ${bh}px, 0px 0px, ` +
   `${x0}px ${y0}px, ${x1}px ${y0}px, ${x1}px ${y1}px, ${x0}px ${y1}px, ${x0}px ${y0}px)`;
 ```
+
+Three things this depends on. **Corrected after the first implementation shipped
+a layer that dimmed nothing at all** — the original draft of this plan specified
+the winding trick and `innerWidth`, and both are wrong:
+
+- **`evenodd`, not the default `nonzero`.** Relying on opposing winding
+  directions works only while the hole sits strictly inside the outer ring. The
+  moment a highlighted element is wider than the ring — which most of the rails
+  are — the windings stop cancelling and the whole layer is clipped away.
+- **The ring is measured from the element, not `innerWidth`.** `clip-path`
+  resolves against the element's own border box, and a vertical scrollbar makes
+  that ~15px narrower than the viewport. A ring 15px too wide overhangs the box
+  and clips everything away — the same failure from the other end.
+- **The hole is clamped to that box**, so it can never overhang either. An
+  element scrolled half off screen still gets a hole, just a cropped one.
 
 The point count is fixed at ten in every step, which is what makes it interpolate.
 
