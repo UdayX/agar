@@ -68,6 +68,12 @@ export async function runBoot(host: HTMLElement, o: BootOpts): Promise<void> {
   canvas.width = Math.round(cssW * dpr);
   canvas.height = Math.round(cssH * dpr);
 
+  // The mark focuses in rather than appearing already sharp. Layout is forced
+  // so the transition has two states to run between; a frame callback would do
+  // the same and would also never fire in a background tab.
+  void host.offsetWidth;
+  host.classList.add('is-ready');
+
   const gw = Math.max(8, Math.ceil(canvas.width / CELL));
   const gh = Math.max(4, Math.ceil(canvas.height / CELL));
 

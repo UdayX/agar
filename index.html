@@ -13,11 +13,24 @@
 <style>
   /* Inline so the boot overlay paints before the stylesheet arrives. */
   #boot{position:fixed;inset:0;z-index:200;display:grid;place-items:center;
-        background:#fafaf8;transition:opacity .5s cubic-bezier(.23,1,.32,1)}
-  #boot.is-out{opacity:0;pointer-events:none}
+        background:#fafaf8;
+        transition:opacity .62s cubic-bezier(.23,1,.32,1),
+                   transform .62s cubic-bezier(.23,1,.32,1),
+                   filter .62s cubic-bezier(.23,1,.32,1)}
+  /* Leaving is a focus pull rather than a fade. The plate the overlay was
+     covering is what the eye should land on, so the overlay drifts forward
+     and out of focus instead of simply thinning out. */
+  #boot.is-out{opacity:0;transform:scale(1.035);filter:blur(14px);pointer-events:none}
   body:has(#boot){overflow:hidden}
   #boot canvas{display:block;image-rendering:pixelated;max-width:100%}
-  .boot-inner{display:flex;flex-direction:column;align-items:center;gap:26px;padding:24px;width:100%}
+  /* And arriving is the same move in reverse: the wordmark resolves out of a
+     blur while the first cells are still landing on it. */
+  .boot-inner{display:flex;flex-direction:column;align-items:center;gap:26px;padding:24px;width:100%;
+        opacity:0;transform:scale(1.012);filter:blur(12px);
+        transition:opacity .75s cubic-bezier(.23,1,.32,1),
+                   transform 1.05s cubic-bezier(.23,1,.32,1),
+                   filter 1.05s cubic-bezier(.23,1,.32,1)}
+  #boot.is-ready .boot-inner{opacity:1;transform:none;filter:blur(0)}
   .boot-line{margin:0;max-width:46ch;text-align:center;opacity:0;
         font:400 12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
         letter-spacing:.2em;text-transform:uppercase;color:#111;
@@ -33,6 +46,15 @@
         letter-spacing:.16em;text-transform:uppercase;color:#8a8a82;
         transition:opacity .6s cubic-bezier(.23,1,.32,1) .2s}
   #boot.is-lit .boot-desk{opacity:1}
+  /* A full-screen blur is cheap enough as a one-shot on a capable machine and
+     is the first thing to go on one that is not. */
+  html[data-perf="low"] #boot.is-out{filter:none}
+  html[data-perf="low"] .boot-inner{filter:none}
+  @media (prefers-reduced-motion:reduce){
+    #boot,.boot-inner{transition-duration:.01ms}
+    #boot.is-out{transform:none;filter:none}
+    .boot-inner{transform:none;filter:none}
+  }
 </style>
 </head>
 <body>
@@ -59,7 +81,7 @@
 <div id="app">
   <header class="bar">
     <a class="brand" href="#stage" aria-label="AGAR, a typographic culture lab">
-      <img class="logo" id="logo" src="" alt="AGAR" width="3318" height="468" />
+      <img class="logo" id="logo" src="" alt="AGAR" width="1822" height="258" />
     </a>
 
     <div class="seg" role="radiogroup" aria-label="Plate mode">

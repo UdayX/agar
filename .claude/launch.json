@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "agar", "runtimeExecutable": "npx", "runtimeArgs": ["vite", "--port", "5178"], "port": 5178 }
+    { "name": "agar", "runtimeExecutable": "npx", "runtimeArgs": ["vite", "--port", "5178"], "port": 5178 },
+    { "name": "agar-preview", "runtimeExecutable": "npx", "runtimeArgs": ["vite", "preview", "--port", "5179"], "port": 5179 }
   ]
 }

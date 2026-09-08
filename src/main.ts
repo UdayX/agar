@@ -755,7 +755,9 @@ $('btn-tour').addEventListener('click', startTour);
   try { hidden = localStorage.getItem('agar.deskbar') === '1'; } catch { /* ignore */ }
   if (!hidden && matchMedia('(max-width: 820px)').matches) bar.hidden = false;
   $('deskbar-x').addEventListener('click', () => {
-    bar.hidden = true;
+    // Leave the way it arrived, then take the space back.
+    bar.classList.add('is-out');
+    setTimeout(() => { bar.hidden = true; }, reduced.matches ? 0 : 280);
     try { localStorage.setItem('agar.deskbar', '1'); } catch { /* ignore */ }
   });
 }

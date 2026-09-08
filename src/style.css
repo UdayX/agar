@@ -46,6 +46,12 @@
 
 * { box-sizing: border-box; }
 
+/* An author rule with a `display` beats the user agent's [hidden] rule, which
+   is how a dismiss button ends up doing nothing at all. Stated once, globally,
+   rather than remembered per component — every component that forgot it was a
+   bug waiting for someone to press the close button. */
+[hidden] { display: none !important; }
+
 html { height: 100%; }
 body {
   margin: 0;
@@ -90,6 +96,21 @@ body {
   height: 100dvh;
 }
 @supports not (height: 100dvh) { #app { height: 100vh; } }
+
+/* The lab is already behind the boot overlay, slightly soft and slightly back.
+   When the overlay is removed from the document this selector stops matching
+   and the shell resolves on its own — the handoff needs no JavaScript, and the
+   two halves of the focus pull cannot fall out of step. */
+#app {
+  transition: opacity 700ms var(--ease-out), transform 700ms var(--ease-out),
+              filter 700ms var(--ease-out);
+}
+body:has(#boot) #app { opacity: 0; transform: scale(0.994); filter: blur(8px); }
+html[data-perf="low"] #app { filter: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  #app { transition-duration: 0.01ms; }
+  body:has(#boot) #app { transform: none; filter: none; }
+}
 
 header.bar {
   position: relative; grid-area: head;
@@ -258,7 +279,6 @@ main.stage {
 /* ── controls ──────────────────────────────────────────────────────────── */
 .ctl { position: relative; padding: var(--s3) 0 var(--s4); border-top: 1px solid var(--line); }
 .ctl:first-child { border-top: 0; }
-.ctl[hidden] { display: none; }
 .ctl-top { display: flex; align-items: center; gap: var(--s2); }
 .lab, .ctl label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
 .ctl .val {
@@ -748,7 +768,13 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
 .tabs > .tab-ind { position: absolute; }
 
 .pane { padding: var(--s5) var(--pad) var(--s7); }
-.pane[hidden] { display: none; }
+/* Tabs are pressed tens of times in a sitting, so this is deliberately almost
+   nothing: enough blur to bridge two different panels, gone before it is read
+   as an animation. */
+@keyframes pane-in { from { opacity: 0.4; filter: blur(3px); } }
+.pane:not([hidden]) { animation: pane-in 180ms var(--ease-out); }
+html[data-perf="low"] .pane:not([hidden]) { animation: none; }
+@media (prefers-reduced-motion: reduce) { .pane:not([hidden]) { animation: none; } }
 .pane:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
 .pane-lede {
   margin: 0 0 var(--s5); max-width: 40ch;
@@ -869,6 +895,18 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
   transition: transform var(--fast) var(--ease-out);
 }
 .deskbar-x:active { transform: scale(0.94); }
+/* No fill mode: a filled animation would hold its end value over the exit
+   transition and the bar would blink out instead of leaving. */
+@keyframes desk-in { from { opacity: 0; transform: translateY(-100%); } }
+.deskbar { animation: desk-in 320ms var(--ease-out); }
+.deskbar.is-out {
+  opacity: 0; transform: translateY(-100%);
+  transition: opacity 260ms var(--ease-out), transform 260ms var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .deskbar { animation: none; }
+  .deskbar.is-out { transition-duration: 0.01ms; transform: none; }
+}
 .foot-desk { margin-top: var(--s3) !important; color: var(--ink-3) !important; font-size: 10.5px !important; }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1006,11 +1044,14 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
 /* ── detail ─────────────────────────────────────────────────────────────── */
 body.is-locked { overflow: hidden; }
 .org-detail { position: fixed; inset: 0; z-index: 120; display: flex; justify-content: flex-end; }
-.org-detail[hidden] { display: none; }
 .od-scrim {
   position: absolute; inset: 0; background: rgba(17, 17, 17, 0.34);
+  /* The library is still there behind the specimen, just out of focus — the
+     panel is a closer look, not a different place. */
+  backdrop-filter: blur(4px);
   opacity: 0; transition: opacity var(--med) var(--ease-out);
 }
+html[data-perf="low"] .od-scrim { backdrop-filter: none; }
 .org-detail.is-in .od-scrim { opacity: 1; }
 .od-panel {
   position: relative; z-index: 1;
@@ -1098,4 +1139,31 @@ html[data-perf="low"] .beat, html[data-perf="low"] .story-cta { transition-durat
   .od-read { padding: var(--s5) var(--s4) var(--s6); }
   .od-stage { height: min(44vh, 340px); }
   .od-panel { border-left: 0; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BETWEEN PAGES
+   The lab and the library are two documents, and the browser will cross-fade
+   them itself if asked. Same focus pull as the loader: the page being left
+   goes soft, the page arriving resolves. Browsers without view transitions
+   navigate exactly as they always did.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@view-transition { navigation: auto; }
+
+:root { --vt-blur: 6px; }
+html[data-perf="low"] { --vt-blur: 0px; }
+
+@keyframes vt-out { to { opacity: 0; filter: blur(var(--vt-blur)); } }
+@keyframes vt-in { from { opacity: 0; filter: blur(var(--vt-blur)); } }
+
+::view-transition-old(root) { animation: vt-out 200ms var(--ease-out) both; }
+::view-transition-new(root) { animation: vt-in 280ms var(--ease-out) both; }
+
+/* The wordmark is the one thing both pages share, so it stays put across the
+   navigation instead of dissolving and re-forming with everything else. */
+#logo { view-transition-name: wordmark; }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.01ms; }
+  #logo { view-transition-name: none; }
 }
