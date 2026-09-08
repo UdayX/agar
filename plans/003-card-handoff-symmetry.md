@@ -232,3 +232,16 @@ The blur amount is the one value here that genuinely cannot be judged from code.
 Two renders of the same shape at 1.0 and 1.16 may need almost no bridging, or the
 dither pattern shifting between the two may make the seam obvious. Record it before
 settling on 3px.
+
+---
+
+## Corrected after implementation
+
+The `detach()` guard specified here checked only `liveOn`. It also has to check
+`detailOpen`: opening an organism from the keyboard or a hash change inside the
+160ms handoff window would otherwise fire the pending detach and rip the shared
+canvas out of the panel it had just been handed to. The guard is now
+`if (liveOn || detailOpen) return;`. This is the same mistake plan 002 warned
+about and this plan then made — worth remembering that a single shared canvas
+has exactly two possible owners, and every deferred teardown has to check both.
+

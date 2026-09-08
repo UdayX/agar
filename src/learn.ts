@@ -49,6 +49,9 @@ viewer.spin(!reduced);
 onTier((t) => viewer.quality(t));
 
 const THUMB = tier === 'low' ? 168 : 208;
+const LIVE_ZOOM = 1.16;
+const HANDOFF = 160;                     // ms; matches the CSS bridge below
+let leaving = 0;                         // pending goStill teardown
 
 // ── cards ───────────────────────────────────────────────────────────────
 const cards = new Map<string, HTMLElement>();
@@ -107,20 +110,41 @@ function goLive(id: string): void {
   const card = cards.get(id);
   const stage = card?.querySelector('.org-stage') as HTMLElement | undefined;
   if (!stage) return;
+  clearTimeout(leaving);
   liveOn = id;
   stage.appendChild(viewer.el);
   viewer.size(THUMB, THUMB);
   viewer.show(loreById(id)!.form);
-  viewer.zoom(1.16);
+  // Snap to the still's scale first, then ease up — otherwise the second card
+  // the pointer touches inherits the first one's zoom and never animates.
+  viewer.setZoom(1);
+  viewer.zoom(LIVE_ZOOM);
   if (!reduced) viewer.start();
+  viewer.el.classList.remove('is-leaving');
+  void viewer.el.offsetWidth;            // flush, so the entry transition runs
+  viewer.el.classList.add('is-live');
 }
 
 function goStill(): void {
   if (!liveOn || detailOpen) return;
   liveOn = null;
-  viewer.stop();
+  // Leave the way it arrived: ease the zoom back down and let the loop render it,
+  // then detach. Not on transitionend — a backgrounded tab fires no transitions
+  // and the canvas would never be released.
   viewer.zoom(1);
-  viewer.el.remove();
+  viewer.el.classList.remove('is-live');
+  viewer.el.classList.add('is-leaving');
+  const detach = (): void => {
+    // A new card claimed it mid-exit, or the detail view did — opening a card
+    // from the keyboard or a hash change inside this window would otherwise rip
+    // the shared canvas straight back out of the panel it was just handed to.
+    if (liveOn || detailOpen) return;
+    viewer.stop();
+    viewer.setZoom(1);
+    viewer.el.classList.remove('is-leaving');
+    viewer.el.remove();
+  };
+  if (reduced) detach(); else leaving = window.setTimeout(detach, HANDOFF);
 }
 
 if (canHover) {
@@ -190,6 +214,12 @@ function openDetail(id: string, push = true): void {
 
   detailOpen = true;
   liveOn = null;
+  clearTimeout(leaving);                   // a card handoff may still be unwinding
+  // Reopening inside the 180ms exit window is a normal thing to do — close one
+  // organism, immediately open the next. `is-out` has to come off, or it stays
+  // alongside `is-in`, wins on source order, and the panel opens invisible at
+  // opacity 0 with focus trapped inside it.
+  detail.classList.remove('is-out');
   detail.innerHTML = fill(l);
   detail.hidden = false;
   document.body.classList.add('is-locked');
@@ -218,14 +248,30 @@ function sizeDetail(): void {
 function closeDetail(push = true): void {
   if (!detailOpen) return;
   detailOpen = false;
-  viewer.stop();
-  viewer.el.remove();
-  detail.classList.remove('is-in');
-  detail.hidden = true;
-  detail.innerHTML = '';
+  // Focus and history move now — the panel is already gone as far as the user is
+  // concerned, and waiting 180ms to hand focus back would be felt as a stall.
   document.body.classList.remove('is-locked');
   if (push && location.hash) history.pushState(null, '', location.pathname);
   lastFocus?.focus();
+
+  detail.classList.remove('is-in');
+  detail.classList.add('is-out');
+
+  // Leaving is the reverse of arriving, so the teardown waits for it. Not on a
+  // transitionend listener: a tab in the background gets no transitions, and the
+  // panel would then never be torn down at all.
+  const done = (): void => {
+    if (detailOpen) return;              // reopened during the exit — leave it alone
+    detail.classList.remove('is-out');
+    detail.hidden = true;
+    detail.innerHTML = '';
+    // The mirror of the guard in goStill: the pointer may have landed on a card
+    // while the panel was closing, and that card now owns the one viewer. Only
+    // reclaim it if it is still ours. (Clearing innerHTML is safe either way —
+    // once a card has it, it is no longer a descendant of the panel.)
+    if (!liveOn) { viewer.stop(); viewer.el.remove(); }
+  };
+  if (reduced) done(); else setTimeout(done, 180);
 }
 
 lib.addEventListener('click', (e) => {

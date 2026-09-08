@@ -270,6 +270,8 @@ export interface Viewer {
   /** css pixels; the render target is this divided by the dither cell. */
   size(w: number, h: number): void;
   zoom(z: number): void;
+  /** Jump the zoom with no easing — for handing the viewer to a new host. */
+  setZoom(z: number): void;
   spin(on: boolean): void;
   start(): void;
   stop(): void;
@@ -389,6 +391,7 @@ export function createViewer(canvas: HTMLCanvasElement, o: ViewerOpts): Viewer {
     show(f: Form) { form = Math.max(0, FORMS.indexOf(f)); if (!raf) render(performance.now()); },
     size(w, h) { cssW = w; cssH = h; resize(); if (!raf) render(performance.now()); },
     zoom(z) { zoomTo = z; },
+    setZoom(z) { zoomTo = z; zoomNow = z; },
     spin(on) { spinning = on; },
     start() { if (!raf) { t0 = performance.now() - 1000; raf = requestAnimationFrame(loop); } },
     stop() { if (raf) cancelAnimationFrame(raf); raf = 0; },
@@ -439,6 +442,6 @@ function flatFallback(canvas: HTMLCanvasElement, o: ViewerOpts): Viewer {
     el: canvas,
     show(f) { form = f; paint(); },
     size(w, h) { cssW = w; cssH = h; paint(); },
-    zoom() {}, spin() {}, start() {}, stop() {}, quality() {},
+    zoom() {}, setZoom() {}, spin() {}, start() {}, stop() {}, quality() {},
   };
 }

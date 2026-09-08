@@ -159,3 +159,24 @@ close-then-open safe.
 Whether 180ms is the right exit against a 260ms entrance is the one judgement here
 that code cannot settle. Two-thirds is the conventional starting point; if the exit
 reads as abrupt on a 720px panel, 200ms is the next value to try, not 240ms.
+
+---
+
+## Corrected after implementation
+
+Two things this plan missed, both found by driving the page rather than reading
+the diff:
+
+1. **`openDetail` must remove `is-out`.** Closing one organism and immediately
+   opening another — an obvious thing to do — left `is-out` and `is-in` on the
+   container together. `.org-detail.is-out .od-panel` is later in source at equal
+   specificity, so it won, and the panel reopened at `opacity: 0` and
+   `translateX(14px)`: invisible, not hidden, with focus trapped inside it.
+   `openDetail` now clears `is-out` (and the pending handoff timeout) before it
+   fills the panel.
+2. **The deferred teardown must not reclaim a viewer a card has taken.** `done()`
+   called `viewer.el.remove()` unconditionally. If the pointer landed on a card
+   during the 180ms exit, that card had already been handed the one shared
+   canvas, and the teardown ripped it straight back out. It is now guarded with
+   `if (!liveOn)`.
+
