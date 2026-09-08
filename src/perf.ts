@@ -49,8 +49,6 @@ export function initPerf(): Tier {
   return tier;
 }
 
-export const perfTier = (): Tier => tier;
-
 export function setTier(next: Tier, byUser = true): void {
   if (next === tier && pinned === byUser) return;
   tier = next;
@@ -82,7 +80,7 @@ export function sampleFrame(dt: number): void {
 }
 
 /** Simulation ceilings per tier. The plate stays honest; it just stays smaller. */
-export const budget = (t: Tier = tier): { cells: number; pixel: number; dpr: number } =>
+export const budget = (t: Tier): { cells: number; pixel: number; dpr: number } =>
   t === 'high' ? { cells: 9000, pixel: 1, dpr: 2 }
   : t === 'balanced' ? { cells: 5000, pixel: 2, dpr: 1.5 }
   : { cells: 2200, pixel: 3, dpr: 1 };

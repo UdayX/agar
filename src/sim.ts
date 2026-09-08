@@ -223,7 +223,7 @@ export class Sim {
 
   // ── direct manipulation of the plate ───────────────────────────────────
   /** Brush the plate. This is the whole point of the tools: the medium is editable. */
-  paint(x: number, y: number, radius: number, kind: string, strength: number, p: Params): void {
+  paint(x: number, y: number, radius: number, kind: string, p: Params): void {
     const r2 = radius * radius;
     if (kind === 'feed' || kind === 'toxin') {
       const f = kind === 'feed' ? this.field : this.toxin;
@@ -238,7 +238,7 @@ export class Sim {
           if (d2 > r2) continue;
           const fall = 1 - d2 / r2;
           const i = gy * f.cols + gx;
-          f.s[i] = Math.min(kind === 'feed' ? p.substrate * 2.5 : 4, f.s[i] + fall * strength * 0.5);
+          f.s[i] = Math.min(kind === 'feed' ? p.substrate * 2.5 : 4, f.s[i] + fall * 0.5);
         }
       }
       return;
@@ -255,7 +255,7 @@ export class Sim {
     }
     if (kind === 'inoculate') {
       const r = this.rng;
-      const want = Math.max(1, Math.round(radius * radius * 0.004 * strength));
+      const want = Math.max(1, Math.round(radius * radius * 0.004));
       for (let i = 0; i < want && this.cells.length < p.capacity; i++) {
         const a = r.range(0, Math.PI * 2), d = Math.sqrt(r.next()) * radius;
         const c = this.makeCell(x + Math.cos(a) * d, y + Math.sin(a) * d, this.cells.length);

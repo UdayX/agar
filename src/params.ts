@@ -194,7 +194,6 @@ export const defaults = {
   // ── tools ──────────────────────────────────────────────────────────────
   tool: 'feed' as Tool,
   brush: 34,
-  brushStrength: 1,
 
   // ── time ───────────────────────────────────────────────────────────────
   timeScale: 25,        // sim-minutes per real second

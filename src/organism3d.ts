@@ -265,7 +265,6 @@ void main() {
 export interface ViewerOpts { ink: RGB; paper: RGB; acid: RGB; }
 
 export interface Viewer {
-  readonly ok: boolean;
   readonly el: HTMLCanvasElement;
   show(form: Form): void;
   /** css pixels; the render target is this divided by the dither cell. */
@@ -274,7 +273,6 @@ export interface Viewer {
   spin(on: boolean): void;
   start(): void;
   stop(): void;
-  destroy(): void;
   quality(q: Quality): void;
 }
 
@@ -387,7 +385,6 @@ export function createViewer(canvas: HTMLCanvasElement, o: ViewerOpts): Viewer {
   resize();
 
   return {
-    ok: true,
     el: canvas,
     show(f: Form) { form = Math.max(0, FORMS.indexOf(f)); if (!raf) render(performance.now()); },
     size(w, h) { cssW = w; cssH = h; resize(); if (!raf) render(performance.now()); },
@@ -396,14 +393,6 @@ export function createViewer(canvas: HTMLCanvasElement, o: ViewerOpts): Viewer {
     start() { if (!raf) { t0 = performance.now() - 1000; raf = requestAnimationFrame(loop); } },
     stop() { if (raf) cancelAnimationFrame(raf); raf = 0; },
     quality(next) { q = next; resize(); if (!raf) render(performance.now()); },
-    destroy() {
-      this.stop();
-      canvas.removeEventListener('pointerdown', down);
-      canvas.removeEventListener('pointermove', move);
-      canvas.removeEventListener('pointerup', up);
-      canvas.removeEventListener('pointercancel', up);
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
-    },
   };
 }
 
@@ -447,10 +436,9 @@ function flatFallback(canvas: HTMLCanvasElement, o: ViewerOpts): Viewer {
   };
 
   return {
-    ok: false,
     el: canvas,
     show(f) { form = f; paint(); },
     size(w, h) { cssW = w; cssH = h; paint(); },
-    zoom() {}, spin() {}, start() {}, stop() {}, quality() {}, destroy() {},
+    zoom() {}, spin() {}, start() {}, stop() {}, quality() {},
   };
 }

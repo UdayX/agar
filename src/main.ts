@@ -315,7 +315,7 @@ function toPlate(e: PointerEvent): [number, number] {
 
 function apply(x: number, y: number): void {
   if (P.tool === 'inspect' || P.tool === 'light') return;
-  sim.paint(x, y, P.brush, P.tool, P.brushStrength, P);
+  sim.paint(x, y, P.brush, P.tool, P);
 }
 
 canvas.addEventListener('pointerdown', (e) => {
