@@ -896,4 +896,7 @@ if (hasImportedFont()) fontStatus.textContent = `Culturing “${importedFontName
 
 // First visit gets the walkthrough, once, after the boot overlay has cleared.
 // Anyone who has seen it never sees it again unless they ask for it.
-if (!tourSeen()) setTimeout(startTour, reduced.matches ? 400 : 5400);
+// Re-checked when it fires, not only when it is scheduled: someone who opens
+// the walkthrough by hand and skips it inside the first five seconds has
+// answered the question, and should not have it opened again for them.
+if (!tourSeen()) setTimeout(() => { if (!tourSeen()) startTour(); }, reduced.matches ? 400 : 5400);

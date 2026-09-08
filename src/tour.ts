@@ -29,6 +29,12 @@ export function tourSeen(): boolean {
 }
 
 export function runTour(steps: Step[], onEnd?: () => void): void {
+  // One at a time. There are three ways in — the header button, the ? key, and
+  // the automatic start on a first visit — and nothing stopped them stacking:
+  // two dims darkening each other, two spotlights, two cards, and two
+  // capture-phase key handlers fighting over Escape.
+  if (document.querySelector('.tour')) return;
+
   const live = steps.filter((s) => document.getElementById(s.target));
   if (!live.length) return;
 
