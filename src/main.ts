@@ -1,6 +1,6 @@
 /** AGAR — wiring. */
 import './style.css';
-import { defaults, PRESETS, SPECIES, speciesById, type Mode, type Params } from './params';
+import { coerceParams, defaults, PRESETS, SPECIES, speciesById, type Mode, type Params } from './params';
 import { Sim, DEAD } from './sim';
 import { Renderer, hexToRGB } from './render';
 import { buildControls, buildOrganisms, buildPresets, buildReadout, buildThemes, buildTools, buildMilestones, renderLog } from './ui';
@@ -546,11 +546,19 @@ function offerResume(): void {
   let saved: { at: number; t: number; params: Partial<Params> } | null = null;
   try { saved = JSON.parse(localStorage.getItem(STORE) ?? 'null'); } catch { saved = null; }
   if (!saved || !saved.params) return;
-  const awayMin = (Date.now() - saved.at) / 60000;
-  if (awayMin < 1 || awayMin > 60 * 24 * 14) return;
+  // Storage is the third door parameters come through, and it is a trust
+  // boundary like the other two: every page under this origin can write it, and
+  // on GitHub Pages the origin is the whole user account, not this project. The
+  // restored values reach applyAccent() and therefore the --acid property, so
+  // they are checked exactly the way a share link is.
+  const restored = coerceParams(saved.params);
+  const at = Number(saved.at);
+  if (!Number.isFinite(at)) return;
+  const awayMin = (Date.now() - at) / 60000;
+  if (!Number.isFinite(awayMin) || awayMin < 1 || awayMin > 60 * 24 * 14) return;
 
   const banner = $('resume');
-  const grown = Math.min(awayMin * (saved.params.timeScale ?? 25) * 60, 60 * 96);
+  const grown = Math.min(awayMin * (restored.timeScale ?? 25) * 60, 60 * 96);
   $('resume-text').textContent =
     `A culture was left incubating ${awayMin < 60 ? `${Math.round(awayMin)} minutes` : `${(awayMin / 60).toFixed(1)} hours`} ago. ` +
     `Resuming will grow it forward by about ${(grown / 60).toFixed(0)} culture hours.`;
@@ -559,7 +567,7 @@ function offerResume(): void {
   $('resume-no').addEventListener('click', () => { banner.hidden = true; localStorage.removeItem(STORE); });
   $('resume-yes').addEventListener('click', () => {
     banner.hidden = true;
-    Object.assign(P, saved!.params);
+    Object.assign(P, restored);
     applyAccent(); syncOrganisms(P.species); syncTools(P.tool);
     setMode(P.mode, false); panel.sync(); rate.set(P.timeScale);
     resetSim();

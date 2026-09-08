@@ -3,6 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- Everything this page needs comes from this origin, so say so. GitHub Pages
+     serves no headers we control, but a meta policy is enforced just the same
+     for everything except frame-ancestors, which is ignored in meta form.
+     script-src carries no 'unsafe-inline': there is not one inline script in
+     the build, so no injected one can run either. img-src is the reason this is
+     worth having beyond tidiness — it is what stops a parameter that reaches a
+     CSS custom property from fetching anything off this origin. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'" />
 <title>Learn — AGAR</title>
 <meta name="description" content="A library of the nine organisms AGAR can culture. What each one is, how it behaves, why it matters — with a three-dimensional close-up of every form." />
 <meta name="color-scheme" content="light" />
