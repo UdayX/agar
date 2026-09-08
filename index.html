@@ -11,37 +11,66 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23fafaf8'/%3E%3Crect x='3' y='3' width='26' height='26' fill='%23ccff00'/%3E%3Ccircle cx='11' cy='12' r='3' fill='%23111'/%3E%3Ccircle cx='20' cy='19' r='4.5' fill='%23111'/%3E%3Ccircle cx='21' cy='9' r='2' fill='%23111'/%3E%3C/svg%3E" />
 <style>
   /* Inline so the boot overlay paints before the stylesheet arrives. */
-  #boot{position:fixed;inset:0;z-index:200;display:grid;place-items:center;gap:18px;
-        background:#fafaf8;transition:opacity .32s cubic-bezier(.23,1,.32,1),transform .32s cubic-bezier(.23,1,.32,1)}
-  #boot.is-out{opacity:0;transform:scale(1.015);pointer-events:none}
-  #boot canvas{display:block;image-rendering:pixelated}
-  #boot .boot-cap{margin:0;font:500 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+  #boot{position:fixed;inset:0;z-index:200;display:grid;place-items:center;
+        background:#fafaf8;transition:opacity .5s cubic-bezier(.23,1,.32,1)}
+  #boot.is-out{opacity:0;pointer-events:none}
+  body:has(#boot){overflow:hidden}
+  #boot canvas{display:block;image-rendering:pixelated;max-width:100%}
+  .boot-inner{display:flex;flex-direction:column;align-items:center;gap:26px;padding:24px;width:100%}
+  .boot-line{margin:0;max-width:46ch;text-align:center;opacity:0;
+        font:400 12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+        letter-spacing:.2em;text-transform:uppercase;color:#111;
+        transition:opacity .6s cubic-bezier(.23,1,.32,1)}
+  #boot.is-lit .boot-line{opacity:1}
+  .boot-foot{display:flex;align-items:baseline;gap:10px;
+        font:500 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
         letter-spacing:.24em;text-transform:uppercase;color:#8a8a82}
+  .boot-pct{font-variant-numeric:tabular-nums}
+  .boot-foot p{margin:0}
 </style>
 </head>
 <body>
-<div id="boot"><canvas aria-hidden="true"></canvas><p class="boot-cap">Culturing</p></div>
+<div id="boot">
+  <div class="boot-inner">
+    <canvas aria-hidden="true"></canvas>
+    <p class="boot-line">Every letterform is a habitat</p>
+    <div class="boot-foot">
+      <p class="boot-cap">Plating</p>
+      <p class="boot-pct">000</p>
+    </div>
+  </div>
+</div>
 <p class="visually-hidden" role="status">Loading AGAR</p>
 
 <a class="skip" href="#stage">Skip to the culture plate</a>
 
 <div id="app">
   <header class="bar">
-    <img class="logo" id="logo" src="" alt="AGAR" width="3318" height="468" />
+    <a class="brand" href="#stage" aria-label="AGAR, a typographic culture lab">
+      <img class="logo" id="logo" src="" alt="AGAR" width="3318" height="468" />
+    </a>
+
     <div class="seg" role="radiogroup" aria-label="Plate mode">
       <span class="seg-ind" aria-hidden="true"></span>
       <label class="seg-opt"><input type="radio" name="mode" value="specimen" checked /><span>Specimen</span></label>
       <label class="seg-opt"><input type="radio" name="mode" value="dish" /><span>Petri dish</span></label>
     </div>
+
     <p class="tagline" id="mode-note">Letterforms are the growth medium.</p>
+
     <div class="spacer"></div>
+
+    <p class="live" id="live" data-on="false">
+      <span class="live-dot" aria-hidden="true"></span>
+      <span class="live-txt">Idle</span>
+    </p>
     <button class="btn" id="btn-share" type="button">Copy setup link</button>
   </header>
 
   <aside class="rail" id="rail-left" aria-label="Experiments and parameters">
     <details class="block" open>
       <summary><span class="idx">01</span> Experiments</summary>
-      <div class="block-body">
+      <div class="block-body pad0">
         <div class="preset-list" id="presets" role="group" aria-label="Preset experiments"></div>
       </div>
     </details>
@@ -85,6 +114,17 @@
   </aside>
 
   <main class="stage" id="stage" tabindex="-1">
+    <!-- The specimen is the subject of the tool, so its field sits with the
+         plate rather than buried among forty parameters. -->
+    <div class="specimen" id="specimen-bar">
+      <label class="specimen-lab" for="specimen-text">Specimen</label>
+      <textarea id="specimen-text" class="specimen-in" rows="1" spellcheck="false"
+                autocapitalize="characters" autocomplete="off"
+                aria-describedby="specimen-help"
+                placeholder="Type the letterforms to culture…"></textarea>
+      <p class="specimen-help" id="specimen-help">Return adds a line.</p>
+    </div>
+
     <div class="readout" id="readout"></div>
 
     <div class="canvas-wrap">
@@ -95,6 +135,7 @@
           <button class="btn" id="resume-no" type="button">Start fresh</button>
         </div>
       </div>
+
       <canvas id="plate" role="img" aria-label="Culture plate. Simulation not started."></canvas>
       <div class="probe" id="probe" hidden></div>
 
@@ -155,15 +196,7 @@
     </details>
 
     <details class="block" open>
-      <summary><span class="idx">C</span> Lab log</summary>
-      <div class="block-body">
-        <ul class="milestones" id="milestones" aria-label="Observed events"></ul>
-        <ul id="log" aria-label="Simulation events"></ul>
-      </div>
-    </details>
-
-    <details class="block" open>
-      <summary><span class="idx">D</span> Export</summary>
+      <summary><span class="idx">C</span> Export</summary>
       <div class="block-body">
         <div class="btn-row">
           <button class="btn" id="ex-png1" type="button">PNG 1×</button>
@@ -185,6 +218,14 @@
     </details>
 
     <details class="block">
+      <summary><span class="idx">D</span> Lab log</summary>
+      <div class="block-body">
+        <ul class="milestones" id="milestones" aria-label="Observed events"></ul>
+        <ul id="log" aria-label="Simulation events"></ul>
+      </div>
+    </details>
+
+    <details class="block">
       <summary><span class="idx">E</span> Keyboard</summary>
       <div class="block-body">
         <p class="note pad0">
@@ -192,7 +233,6 @@
           <kbd>N</kbd> new seed · <kbd>P</kbd> antibiotic pulse · <kbd>E</kbd> export PNG ·
           <kbd>D</kbd> cycle dither kernel · <kbd>1</kbd>–<kbd>6</kbd> pick a plate tool.
         </p>
-        <p class="note"><a href="#credits">Sources and credits</a> are at the foot of the page.</p>
         <p class="note">Shortcuts are ignored while typing. Every control is reachable with <kbd>Tab</kbd>; sliders take arrow keys, <kbd>Page</kbd>, <kbd>Home</kbd> and <kbd>End</kbd>.</p>
       </div>
     </details>
@@ -200,27 +240,43 @@
 </div>
 
 <footer class="foot" id="credits">
-  <div class="foot-grid">
-    <section class="foot-about">
-      <h2>AGAR</h2>
+  <div class="foot-top">
+    <section class="foot-col foot-lede">
+      <h2>What this is</h2>
       <p>A typographic culture lab. Letterforms, or an open petri dish, as growth medium for
       simulated prokaryotes, fungi and protists — grown on published kinetics and rendered
       through a dither pipeline.</p>
-      <p class="foot-links">
-        <a href="https://udaymadethis.com/" target="_blank" rel="noopener noreferrer">udaymadethis.com</a>
-        <a href="https://github.com/UdayX/agar" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
-        <span>MIT licence</span>
-      </p>
-      <p class="note">Built by Uday. Fonts you import stay on your own machine — nothing is uploaded.</p>
     </section>
 
-    <section class="foot-refs">
-      <h2>The research this is built on</h2>
-      <p class="note pad0">Every rule in the simulation traces to one of these papers. Where the
-      model simplifies or scales a published result, the entry says so. Citations are given in
-      full; none of this work is mine, and none of the authors are affiliated with this project.</p>
-      <ol class="refs" id="refs"></ol>
+    <nav class="foot-col" aria-label="This project">
+      <h2>Index</h2>
+      <a href="attributions.html">Attributions</a>
+      <a href="https://github.com/UdayX/agar" target="_blank" rel="noopener noreferrer">Source</a>
+      <a href="#stage">Back to the plate</a>
+    </nav>
+
+    <nav class="foot-col" aria-label="Elsewhere">
+      <h2>Elsewhere</h2>
+      <a href="https://udaymadethis.com/" target="_blank" rel="noopener noreferrer">udaymadethis.com</a>
+    </nav>
+
+    <section class="foot-col">
+      <h2>Privacy</h2>
+      <p>Everything runs in this tab. Fonts you import and cultures you save stay on your own
+      machine — nothing is uploaded, and there is no analytics.</p>
     </section>
+  </div>
+
+  <div class="foot-plate">
+    <canvas id="foot-canvas" aria-hidden="true"></canvas>
+    <p class="visually-hidden">A live culture growing into the AGAR wordmark.</p>
+  </div>
+
+  <div class="foot-meta">
+    <span>© 2026 Uday. All rights reserved.</span>
+    <span>MIT licence</span>
+    <span><a href="attributions.html">Research attributions</a></span>
+    <span class="foot-meta-end">Built by <a href="https://udaymadethis.com/" target="_blank" rel="noopener noreferrer">Uday</a></span>
   </div>
 </footer>
 

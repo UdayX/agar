@@ -3,12 +3,13 @@ import './style.css';
 import { defaults, PRESETS, speciesById, type Mode, type Params } from './params';
 import { Sim, DEAD } from './sim';
 import { Renderer, hexToRGB } from './render';
-import { buildControls, buildOrganisms, buildPresets, buildReadout, buildRefs, buildThemes, buildTools, buildMilestones, renderLog } from './ui';
+import { buildControls, buildOrganisms, buildPresets, buildReadout, buildThemes, buildTools, buildMilestones, renderLog } from './ui';
 import { Slider } from './slider';
 import { drawGrowth, drawTraits } from './charts';
 import * as X from './export';
 import { importFont, clearImportedFont, hasImportedFont, importedFontName } from './glyph';
 import { runBoot } from './loader';
+import { runFooter } from './footer';
 import logoUrl from './AgarLogo.svg';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -53,8 +54,11 @@ function plateSize(): [number, number] {
   const cs = getComputedStyle(wrap);
   const px = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
   const py = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
-  const w = Math.max(240, Math.floor(wrap.clientWidth - px));
-  const h = Math.max(180, Math.floor(wrap.clientHeight - py));
+  // The floors only guard against a degenerate plate during layout thrash. They
+  // must stay below what the narrowest breakpoint actually offers, or the plate
+  // is forced taller than its box and slides under the dock.
+  const w = Math.max(200, Math.floor(wrap.clientWidth - px));
+  const h = Math.max(140, Math.floor(wrap.clientHeight - py));
   return [w, h];
 }
 
@@ -139,13 +143,13 @@ const syncPresets = buildPresets($('presets'), (id) => {
   syncTools(P.tool);
   setMode(P.mode, false);
   panel.sync();
+  syncSpecimen();
   rate.set(P.timeScale);
   rateOut.textContent = `${P.timeScale} min/s`;
   resetSim();
   say(`${preset.label} loaded. ${preset.note}`);
 });
 syncPresets(activePreset);
-buildRefs($('refs'));
 const syncMilestones = buildMilestones($('milestones'));
 
 const setReadout = buildReadout($('readout'), [
@@ -168,6 +172,7 @@ function setMode(m: Mode, rebuild = true): void {
   P.mode = m;
   panel.setMode(m);
   $('block-font').hidden = m !== 'specimen';
+  $('specimen-bar').hidden = m !== 'specimen';
   $('mode-note').textContent = m === 'dish'
     ? 'An open plate. Seed it, feed it, and leave it to grow.'
     : 'Letterforms are the growth medium.';
@@ -177,6 +182,35 @@ function setMode(m: Mode, rebuild = true): void {
 for (const r of document.querySelectorAll<HTMLInputElement>('input[name="mode"]')) {
   r.addEventListener('change', () => { if (r.checked) { setMode(r.value as Mode); say($('mode-note').textContent ?? ''); } });
 }
+
+// ── specimen field ───────────────────────────────────────────────────────
+// The text is the one parameter whose effect you can read directly off the
+// plate, so it sits above the plate rather than in the rail. It is a textarea
+// only so that Return can add a line; it is sized to its content and never
+// scrolls, so it still reads as a single field.
+const specimen = $<HTMLTextAreaElement>('specimen-text');
+
+function fitSpecimen(): void {
+  specimen.style.height = 'auto';
+  specimen.style.height = `${Math.min(112, specimen.scrollHeight)}px`;
+}
+
+/** Push P.text into the field — after a preset, a shared link or a reset. */
+function syncSpecimen(): void {
+  if (specimen.value !== P.text) specimen.value = P.text;
+  fitSpecimen();
+}
+
+let specimenTimer = 0;
+specimen.addEventListener('input', () => {
+  fitSpecimen();
+  P.text = specimen.value;
+  // Rebuilding the culture on every keystroke would throw away the colony
+  // mid-word. Coalesce to the pause after typing instead.
+  clearTimeout(specimenTimer);
+  specimenTimer = window.setTimeout(() => resetSim(), 260);
+});
+syncSpecimen();
 
 // ── transport ────────────────────────────────────────────────────────────
 const btnPlay = $<HTMLButtonElement>('btn-play');
@@ -203,6 +237,9 @@ function setRunning(on: boolean): void {
   running = on;
   btnPlay.textContent = on ? 'Pause' : 'Incubate';
   btnPlay.setAttribute('aria-pressed', String(on));
+  const live = $('live');
+  live.dataset.on = String(on);
+  (live.querySelector('.live-txt') as HTMLElement).textContent = on ? 'Incubating' : 'Idle';
   if (!on && lifespanRun) endLifespan('paused');
 }
 
@@ -558,6 +595,16 @@ const bootEl = document.getElementById('boot');
 if (bootEl) {
   void runBoot(bootEl, {
     paper: hexToRGB(P.paperColor), ink: hexToRGB(P.inkColor), acid: hexToRGB(P.acidColor),
+  });
+}
+
+// The footer runs its own culture: black cells on acid, growing into the mark.
+// It uses the brand colours rather than the plate's, so recolouring an
+// experiment does not recolour the page furniture.
+const footCanvas = document.getElementById('foot-canvas');
+if (footCanvas) {
+  runFooter(footCanvas as HTMLCanvasElement, {
+    ink: hexToRGB(defaults.inkColor), acid: hexToRGB(defaults.acidColor),
   });
 }
 

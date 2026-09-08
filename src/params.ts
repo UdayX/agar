@@ -224,8 +224,8 @@ export const GROUPS = [
 
 export const CONTROLS: Control[] = [
   // Specimen
-  { modes: ['specimen'], key: 'text', group: 'Specimen', label: 'Inoculated text', kind: 'text', level: 'basic',
-    help: 'The letterforms are the growth medium. Substrate is laid inside the glyphs; the colony eats the type.' },
+  // 'text' is not here: the specimen field lives above the plate, where the
+  // thing it changes is visible. See the specimen bar in index.html.
   { modes: ['specimen'], key: 'fontSize', group: 'Specimen', label: 'Type size', kind: 'range', min: 40, max: 420, step: 1, unit: 'px', level: 'basic',
     help: 'Cap height of the specimen in device pixels. It is scaled down automatically if it would not fit the plate.' },
   { modes: ['specimen'], key: 'seedDensity', group: 'Specimen', label: 'Inoculum density', kind: 'range', min: 0.02, max: 1, step: 0.01, level: 'basic',
