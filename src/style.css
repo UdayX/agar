@@ -368,7 +368,8 @@ input.swatch::-webkit-color-swatch { border: 0; }
 
 /* ── buttons ───────────────────────────────────────────────────────────── */
 .btn {
-  appearance: none; display: inline-flex; align-items: center; justify-content: center;
+  appearance: none; position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
   font-family: var(--mono); white-space: nowrap;
   min-height: 34px; padding: 0 var(--s3);
   font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
@@ -388,6 +389,46 @@ input.swatch::-webkit-color-swatch { border: 0; }
 .btn-row { display: flex; flex-wrap: wrap; gap: var(--s1); margin-top: var(--s2); }
 .btn-row > * { flex: 1 1 auto; }
 .btn-row:first-child { margin-top: 0; }
+/* The confirmation is painted over the label, never swapped for it. Replacing
+   the text changes the button's contributed width, and these rows are
+   `flex: 1 1 auto`, so every sibling shifts sideways — a layout animation, on
+   the one press that is supposed to read as the interface acknowledging you.
+   Keeping the original text node in place means the geometry cannot move, and
+   it leaves the accessible name alone: say() already announces the result.
+
+   Both halves are driven from one pair of keyframes on one duration, so the
+   label cannot fade out before the word has faded in. The swap happens at the
+   blurriest point, which is what makes it read as one word becoming another
+   rather than two words trading places. */
+.btn.is-saying { animation: btn-say 1400ms var(--ease-out); }
+.btn.is-saying::after {
+  content: attr(data-say);
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  color: var(--ink);
+  animation: btn-word 1400ms var(--ease-out);
+}
+@keyframes btn-say {
+  0%        { filter: blur(0);   opacity: 1;    color: var(--ink); }
+  8%        { filter: blur(2px); opacity: 0.55; }
+  10%, 86%  { color: transparent; }
+  20%, 88%  { filter: blur(0);   opacity: 1; }
+  94%       { filter: blur(2px); opacity: 0.55; }
+  100%      { filter: blur(0);   opacity: 1;    color: var(--ink); }
+}
+@keyframes btn-word {
+  0%, 8%    { opacity: 0; }
+  20%, 88%  { opacity: 1; }
+  94%, 100% { opacity: 0; }
+}
+/* No blur to hide behind, so the word simply stands in for the label. Reduced
+   motion means gentler, not absent — the confirmation still has to be readable. */
+html[data-perf="low"] .btn.is-saying { animation: none; color: transparent; }
+html[data-perf="low"] .btn.is-saying::after { animation: none; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .btn.is-saying { animation: none; color: transparent; }
+  .btn.is-saying::after { animation: none; opacity: 1; }
+}
 
 /* ── stage: readout, plate, dock, transport ────────────────────────────── */
 .readout {
@@ -413,8 +454,10 @@ input.swatch::-webkit-color-swatch { border: 0; }
 .tool span {
   display: block; padding: 7px var(--s3); cursor: pointer;
   font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2);
-  transition: background var(--fast) ease, color var(--fast) ease;
+  transition: background var(--fast) ease, color var(--fast) ease,
+              transform var(--fast) var(--ease-out);
 }
+.tool:active span { transform: scale(0.97); }
 .tool + .tool span { border-left: 1px solid var(--line-2); }
 .tool input:checked + span { background: var(--acid); color: var(--ink); }
 .tool input:focus-visible + span { outline: 2px solid var(--ink); outline-offset: -2px; }
@@ -539,8 +582,9 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
   padding: var(--s3) var(--s4) var(--s3) var(--pad);
   border: 0; border-top: 1px solid var(--line);
   background: none; font-family: var(--mono); cursor: pointer;
-  transition: background var(--fast) ease;
+  transition: background var(--fast) ease, transform var(--fast) var(--ease-out);
 }
+.preset:active { transform: scale(0.97); }
 .preset:first-child { border-top: 0; }
 .preset::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;

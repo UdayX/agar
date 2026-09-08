@@ -223,3 +223,36 @@ the case the keyframe/transition rule explicitly exempts.
 all settle to the same width mid-swap. If a format ever fails silently, this makes
 the button lie — the export functions in `src/export.ts` currently cannot fail
 asynchronously, but if that changes, `confirmOn` should move behind the success path.
+
+---
+
+## Corrected after implementation
+
+The plan swapped `btn.textContent` for the confirmation word. That is a layout
+animation, which is the one thing this rule set exists to prevent.
+
+"Saved" is not the width of "PNG 1×", and the export rows are `flex: 1 1 auto`,
+so the button's own content feeds the layout: pressing PNG 1× measurably moved
+PNG 2× and PNG 4× sideways. Pinning `style.width` did not fix it either — with
+`flex-basis: auto` the content width *is* the basis, so overriding it just
+redistributed the row differently (SVG geometry went 239px → 302px).
+
+The fix is not to change the contributed size at all. The original text node
+stays; `data-say` carries the word, `.btn.is-saying::after` paints it over the
+label, and one pair of keyframes on a single 1400ms duration cross-fades the two
+so the swap lands at the blurriest point and cannot drift:
+
+```css
+.btn.is-saying::after { content: attr(data-say); position: absolute; inset: 0; }
+@keyframes btn-say  { 0% { color: var(--ink); } 10%, 86% { color: transparent; } … }
+@keyframes btn-word { 0%, 8% { opacity: 0; } 20%, 88% { opacity: 1; } … }
+```
+
+Measured after the change: zero movement on any of the six buttons, and geometry
+identical before and after the confirmation. It also leaves the accessible name
+alone — `say()` was always the screen-reader channel, and the button no longer
+renames itself for 1.4 seconds.
+
+One knock-on: the clipboard fallback word was "In the bar", which is longer than
+the "Copy link" label it now has to sit inside. Shortened to "In URL".
+

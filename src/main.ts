@@ -48,6 +48,23 @@ const TOOL_HINT: Record<string, string> = {
 
 const say = (msg: string): void => { announce.textContent = msg; };
 
+/**
+ * Say it on the button as well as to the screen reader. The label swaps behind a
+ * short blur, which is what stops the two words reading as two separate objects
+ * flickering in the same box.
+ */
+function confirmOn(btn: HTMLButtonElement, word: string, ms = 1400): void {
+  if (btn.dataset.busy) return;
+  btn.dataset.busy = '1';
+  btn.dataset.say = word;
+  btn.classList.add('is-saying');
+  setTimeout(() => {
+    btn.classList.remove('is-saying');
+    delete btn.dataset.say;
+    delete btn.dataset.busy;
+  }, ms);
+}
+
 const SPECIES_IDS = new Set(SPECIES.map((x) => x.id));
 
 // ── layout ───────────────────────────────────────────────────────────────
@@ -441,12 +458,30 @@ drop.addEventListener('drop', (e) => {
 
 // ── export ───────────────────────────────────────────────────────────────
 const name = () => `agar-${P.species}-${X.stamp()}`;
-$('ex-png1').addEventListener('click', () => X.exportPNG(canvas, 1, name()));
-$('ex-png2').addEventListener('click', () => X.exportPNG(canvas, 2, name()));
-$('ex-png4').addEventListener('click', () => X.exportPNG(canvas, 4, name()));
-$('ex-svg').addEventListener('click', () => X.exportSVG(sim, P, renderer.w, renderer.h, name()));
-$('ex-csv').addEventListener('click', () => X.exportCSV(sim, name()));
-$('ex-json').addEventListener('click', () => X.exportPreset(P, name()));
+$('ex-png1').addEventListener('click', (e) => {
+  X.exportPNG(canvas, 1, name());
+  confirmOn(e.currentTarget as HTMLButtonElement, 'Saved');
+});
+$('ex-png2').addEventListener('click', (e) => {
+  X.exportPNG(canvas, 2, name());
+  confirmOn(e.currentTarget as HTMLButtonElement, 'Saved');
+});
+$('ex-png4').addEventListener('click', (e) => {
+  X.exportPNG(canvas, 4, name());
+  confirmOn(e.currentTarget as HTMLButtonElement, 'Saved');
+});
+$('ex-svg').addEventListener('click', (e) => {
+  X.exportSVG(sim, P, renderer.w, renderer.h, name());
+  confirmOn(e.currentTarget as HTMLButtonElement, 'Saved');
+});
+$('ex-csv').addEventListener('click', (e) => {
+  X.exportCSV(sim, name());
+  confirmOn(e.currentTarget as HTMLButtonElement, 'Saved');
+});
+$('ex-json').addEventListener('click', (e) => {
+  X.exportPreset(P, name());
+  confirmOn(e.currentTarget as HTMLButtonElement, 'Saved');
+});
 
 const presetFile = $<HTMLInputElement>('preset-file');
 $('ex-load').addEventListener('click', () => presetFile.click());
@@ -478,11 +513,18 @@ btnRec.addEventListener('click', () => {
   }
 });
 
-$('btn-share').addEventListener('click', async () => {
+$('btn-share').addEventListener('click', async (e) => {
+  const btn = e.currentTarget as HTMLButtonElement;
   const url = X.shareURL(P);
   history.replaceState(null, '', url);
-  try { await navigator.clipboard.writeText(url); say('Setup link copied to the clipboard.'); }
-  catch { say('Setup link is now in the address bar.'); }
+  try {
+    await navigator.clipboard.writeText(url);
+    say('Setup link copied to the clipboard.');
+    confirmOn(btn, 'Copied');
+  } catch {
+    say('Setup link is now in the address bar.');
+    confirmOn(btn, 'In URL');
+  }
 });
 
 // ── leaving a culture to grow ────────────────────────────────────────────
