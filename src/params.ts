@@ -407,3 +407,79 @@ export const MILESTONES: { id: string; label: string; note: string }[] = [
   { id: 'day', label: 'One culture day', note: 'The plate survived 24 simulated hours.' },
   { id: 'extinct', label: 'Extinction', note: 'Every cell on the plate died. It happens.' },
 ];
+
+/* ── untrusted parameter input ─────────────────────────────────────────────
+   Two doors take parameters from somewhere other than this file: a share link
+   (#p=…, anyone's URL) and an imported preset (anyone's JSON). Both used to
+   copy values straight through after checking only that the *key* was one of
+   ours, which is half a check — the value was whatever the sender wrote.
+
+   That was live: `acidColor` is written to the `--acid` custom property, and
+   custom properties accept almost any token sequence rather than just a colour.
+   A link carrying `acidColor: 'url("https://…")'` turned every
+   `background: var(--acid)` in the stylesheet into a remote image fetch, so
+   simply opening a shared link reported the visitor's IP and user agent to
+   whoever wrote it. No script ran; it did not need to.
+
+   So values are checked here too, against the shape each parameter actually
+   has, and anything that does not fit is dropped rather than corrected — a
+   sender who writes nonsense gets the default, not an argument. */
+
+const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+/* No parentheses, semicolons or braces: enough for a font stack, not enough
+   for a url() or a second declaration. */
+const FONT_STACK = /^[\w ,"'-]{1,200}$/;
+
+const COLOUR_KEYS = new Set(CONTROLS.filter((c) => c.kind === 'colour').map((c) => c.key as string));
+
+const NUM_RANGE = new Map<string, { min: number; max: number }>(
+  CONTROLS.flatMap((c) =>
+    c.kind === 'range' || c.kind === 'int' ? [[c.key as string, { min: c.min, max: c.max }] as const] : []),
+);
+
+/* Every string parameter that is really an enum. The select controls carry
+   their own options; the rest are unions declared above and repeated here
+   because a type disappears at run time and this check happens at run time. */
+const ONE_OF = new Map<string, Set<string>>([
+  ...CONTROLS.flatMap((c) =>
+    c.kind === 'select' ? [[c.key as string, new Set(c.options.map(([v]) => v))] as const] : []),
+  ['mode', new Set(['specimen', 'dish'])],
+  ['tool', new Set(['inspect', 'feed', 'toxin', 'light', 'inoculate', 'scrape'])],
+  ['species', new Set(SPECIES.map((s) => s.id))],
+]);
+
+/** Take only what is recognisably ours, by key *and* by value. */
+export function coerceParams(src: unknown): Partial<Params> {
+  if (!src || typeof src !== 'object') return {};
+  const raw = src as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+
+  for (const key of Object.keys(defaults)) {
+    if (!Object.prototype.hasOwnProperty.call(raw, key)) continue;
+    const v = raw[key];
+    const def = (defaults as Record<string, unknown>)[key];
+
+    if (typeof def === 'boolean') {
+      if (typeof v === 'boolean') out[key] = v;
+      continue;
+    }
+    if (typeof def === 'number') {
+      const n = typeof v === 'number' ? v : Number(v);
+      if (!Number.isFinite(n)) continue;               // NaN and Infinity break the sim
+      const r = NUM_RANGE.get(key);
+      out[key] = r ? Math.min(r.max, Math.max(r.min, n)) : n;
+      continue;
+    }
+    if (typeof v !== 'string') continue;
+
+    if (COLOUR_KEYS.has(key)) { if (HEX.test(v)) out[key] = v; continue; }
+    const allowed = ONE_OF.get(key);
+    if (allowed) { if (allowed.has(v)) out[key] = v; continue; }
+    // The specimen is free text — it is drawn to a canvas, never to the DOM —
+    // but it does not need to be a novel.
+    if (key === 'text') { out[key] = v.slice(0, 500); continue; }
+    if (key === 'fontFamily') { if (FONT_STACK.test(v)) out[key] = v; continue; }
+    // A string parameter nobody taught this function about: refuse it.
+  }
+  return out as Partial<Params>;
+}

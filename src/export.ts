@@ -1,6 +1,6 @@
 /** Getting work out: still, vector, motion, data, and the parameters themselves. */
 import type { Params } from './params';
-import { defaults, speciesById } from './params';
+import { coerceParams, defaults, speciesById } from './params';
 import { hexToRGB } from './render';
 import { DEAD, SENESCENT, type Sim } from './sim';
 
@@ -83,10 +83,7 @@ export function exportPreset(p: Params, name: string): void {
 export async function importPreset(file: File): Promise<Partial<Params>> {
   const text = await file.text();
   const json = JSON.parse(text);
-  const src = json?.params ?? json;
-  const out: Record<string, unknown> = {};
-  for (const k of Object.keys(defaults)) if (k in src) out[k] = src[k];
-  return out as Partial<Params>;
+  return coerceParams(json?.params ?? json);
 }
 
 /** Share link: only the parameters that differ from the defaults. */
@@ -103,10 +100,7 @@ export function readURL(): Partial<Params> | null {
   const m = /#p=(.+)$/.exec(location.hash);
   if (!m) return null;
   try {
-    const json = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
-    const out: Record<string, unknown> = {};
-    for (const k of Object.keys(defaults)) if (k in json) out[k] = json[k];
-    return out as Partial<Params>;
+    return coerceParams(JSON.parse(decodeURIComponent(escape(atob(m[1])))));
   } catch { return null; }
 }
 
