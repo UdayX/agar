@@ -10,6 +10,7 @@ import * as X from './export';
 import { importFont, clearImportedFont, hasImportedFont, importedFontName } from './glyph';
 import { runBoot } from './loader';
 import { runFooter } from './footer';
+import { runCursor } from './cursor';
 import { runTour, tourSeen, type Step } from './tour';
 import { initPerf, budget, onTier, sampleFrame, setTier, type Tier } from './perf';
 import logoUrl from './AgarLogo.svg';
@@ -862,6 +863,10 @@ if (footCanvas) {
     ink: hexToRGB(defaults.inkColor), acid: hexToRGB(defaults.acidColor),
   });
 }
+
+// A few cells that chemotax toward the pointer and never quite catch it —
+// the same brand ink as the footer, not the plate's live colours.
+runCursor({ ink: hexToRGB(defaults.inkColor) });
 
 // The tier has to be known before the first plate is sized, or the machine
 // gets one oversized frame before being told it cannot afford them.

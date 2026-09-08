@@ -16,10 +16,15 @@ import { createViewer, type Viewer } from './organism3d';
 import { hexToRGB } from './render';
 import { defaults } from './params';
 import { initPerf, onTier } from './perf';
+import { runCursor } from './cursor';
 import logoUrl from './AgarLogo.svg';
 
 const tier = initPerf();
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// The library has no plate, so the swarm's "off over the culture" gate never
+// fires here — it simply covers the page.
+runCursor({ ink: hexToRGB(defaults.inkColor) });
 
 // Arriving on a sub-page is still an arrival. Claim the lab's boot flag so the
 // five-second culture sequence does not replay on top of a page transition

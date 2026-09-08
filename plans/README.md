@@ -19,7 +19,7 @@ not a rewrite.
 | 002 | [Let the organism panel close the way it opened](002-organism-detail-exit.md) | MEDIUM | — | **DONE** |
 | 003 | [Make every card's live handoff arrive and leave the same way](003-card-handoff-symmetry.md) | MEDIUM | 002 | **DONE** |
 | 004 | [Press feedback on the last two controls, and confirmation on export](004-press-and-confirm-feedback.md) | MEDIUM | — | **DONE** |
-| 005 | [A chemotactic cursor: the pointer as an attractant source](005-chemotactic-cursor.md) | — (additive) | — | TODO |
+| 005 | [A chemotactic cursor: the pointer as an attractant source](005-chemotactic-cursor.md) | — (additive) | — | **DONE** |
 
 **Dependency:** 003 touches `goLive`/`goStill` in `src/learn.ts`, and 002 touches
 `closeDetail()` in the same file. Land 002 first so the second edit applies to

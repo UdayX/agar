@@ -269,3 +269,49 @@ and someone still asks for the switch.
 The count and alpha are the two values most likely to be wrong on first build. Six
 at 0.5 is a starting point derived from the header sweep's register, not a measured
 result.
+
+---
+
+## Corrected after implementation
+
+Three changes, one of them a defect in this plan.
+
+**The plan's own bug: hit-testing on pointermove.** Constraint 2 specified
+`document.elementFromPoint(x, y)?.closest('.canvas-wrap')` on every move to
+decide whether the swarm is over the plate. `elementFromPoint` forces a
+synchronous layout, and `pointermove` is the hottest event in the browser —
+paying a layout on each one, to learn something two listeners already know, is
+exactly the cost the rest of this pass exists to remove. Replaced with
+`pointerenter`/`pointerleave` bound to `.canvas-wrap` itself: O(1), event-driven,
+zero layout. On the library page there is no plate, nothing is bound, and the
+gate is simply inert.
+
+**Resizing a canvas resets its 2D context.** `globalAlpha` and `fillStyle` were
+set once at startup, so the first window resize would have brought the swarm
+back at full opacity in default black. They are restated inside `layout()`, and
+`prevBox` is cleared there too — last frame's dirty rectangle means nothing at a
+new size.
+
+**The low tier now makes it dormant rather than destroying it.** Constraint 3
+said to tear down if `onTier` later reports `low`. That is right for the
+automatic step-down but wrong for the segmented control, which a person can set
+by hand: turning the tier back up left the swarm gone until a reload. It now
+stops the loop and hides the canvas, which costs the same as not existing and
+can be undone.
+
+**Verified.** Six cells at the high tier (54 painted pixels, 3×3 each), and they
+move. Against a stationary pointer they moved *away* — which a steering
+implementation could never do. Convergence cannot be observed through this
+harness (it renders one frame per screenshot, far too coarse for a run-and-tumble
+walk), so the model was checked numerically at 60fps against a control that
+tumbles at a constant rate:
+
+```
+biased tumbling : 436  392  367  371  372
+unbiased control: 421  403  452  466  464
+(mean px from the pointer, every 5s over 20s, mean of 40 runs)
+```
+
+The bias is what gathers them, and they settle at a distance rather than
+arriving — which is the behaviour the feature is for.
+

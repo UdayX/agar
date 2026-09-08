@@ -1249,3 +1249,13 @@ html[data-perf="low"] { --vt-blur: 0px; }
   ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.01ms; }
   #logo { view-transition-name: none; }
 }
+
+/* One canvas, fixed, inert. Below the walkthrough (150) and the organism panel
+   (120), above the page. */
+.swarm {
+  position: fixed; inset: 0; z-index: 90;
+  pointer-events: none;
+  image-rendering: pixelated;
+  opacity: 1; transition: opacity 200ms var(--ease-out);
+}
+.swarm.is-away { opacity: 0; }
