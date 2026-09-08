@@ -9,7 +9,7 @@
  * Help text is always in the accessibility tree — the toggle only decides
  * whether it is also on screen.
  */
-import { CONTROLS, GROUPS, PRESETS, SPECIES, THEMES, MILESTONES, type Control, type Mode, type Params } from './params';
+import { CONTROLS, GROUPS, PRESETS, SPECIES, THEMES, MILESTONES, type Control, type Level, type Mode, type Params } from './params';
 import { REFERENCES } from './references';
 import { Slider } from './slider';
 
@@ -45,8 +45,14 @@ export interface ControlPanel {
   reflow: () => void;
 }
 
+/**
+ * `hostFor` decides which panel a control lands in. The schema knows the
+ * group a control belongs to; only the page knows which tab that group is
+ * showing under, so routing is the caller's business, not this function's.
+ */
 export function buildControls(
-  basics: HTMLElement, advanced: HTMLElement, p: Params, onChange: OnChange,
+  hostFor: (group: string, level: Level) => HTMLElement,
+  p: Params, onChange: OnChange,
 ): ControlPanel {
   const syncers: (() => void)[] = [];
   const reflows: (() => void)[] = [];
@@ -167,10 +173,12 @@ export function buildControls(
     host.appendChild(wrap);
   };
 
-  for (const c of CONTROLS.filter((x) => x.level === 'basic')) makeControl(c, basics);
+  // Basics stay in schema order inside their own tab, so the first thing under
+  // a tab is always the control most people came for.
+  for (const c of CONTROLS.filter((x) => x.level === 'basic')) makeControl(c, hostFor(c.group, 'basic'));
 
-  // Nested groups carry no number — the outer sections already do, and a second
-  // sequence that skips whatever is hidden reads as a mistake.
+  // Everything else is folded away one group at a time. Nested groups carry no
+  // number — the tab already names the territory.
   GROUPS.forEach((group) => {
     const items = CONTROLS.filter((c) => c.group === group && c.level === 'advanced');
     if (!items.length) return;
@@ -184,7 +192,7 @@ export function buildControls(
     // A whole group can belong to one mode.
     const modes = items[0].modes;
     byMode.push({ el: block, modes: items.every((i) => i.modes === modes) ? modes : undefined });
-    advanced.appendChild(block);
+    hostFor(group, 'advanced').appendChild(block);
   });
 
   return {

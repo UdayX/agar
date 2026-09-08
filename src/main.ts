@@ -1,6 +1,6 @@
 /** AGAR — wiring. */
 import './style.css';
-import { defaults, PRESETS, speciesById, type Mode, type Params } from './params';
+import { defaults, PRESETS, SPECIES, speciesById, type Mode, type Params } from './params';
 import { Sim, DEAD } from './sim';
 import { Renderer, hexToRGB } from './render';
 import { buildControls, buildOrganisms, buildPresets, buildReadout, buildThemes, buildTools, buildMilestones, renderLog } from './ui';
@@ -10,6 +10,8 @@ import * as X from './export';
 import { importFont, clearImportedFont, hasImportedFont, importedFontName } from './glyph';
 import { runBoot } from './loader';
 import { runFooter } from './footer';
+import { runTour, tourSeen, type Step } from './tour';
+import { initPerf, budget, onTier, sampleFrame, setTier, type Tier } from './perf';
 import logoUrl from './AgarLogo.svg';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -45,6 +47,8 @@ const TOOL_HINT: Record<string, string> = {
 };
 
 const say = (msg: string): void => { announce.textContent = msg; };
+
+const SPECIES_IDS = new Set(SPECIES.map((x) => x.id));
 
 // ── layout ───────────────────────────────────────────────────────────────
 function plateSize(): [number, number] {
@@ -97,7 +101,20 @@ function applySpecies(id: string): void {
   $('org-note').textContent = s.note;
 }
 
-const panel = buildControls($('basics'), $('advanced'), P, (key, value) => {
+// Which tab each parameter group lives under. The schema groups by subject
+// matter; the interface groups by what a person is trying to change, and those
+// are not the same cut. Everything unclaimed falls to Medium, which is the
+// plate itself.
+const TAB_OF: Record<string, 'organism' | 'medium' | 'look'> = {
+  Organism: 'organism', Metabolism: 'organism', Reproduction: 'organism', Mutation: 'organism',
+  Specimen: 'medium', Dish: 'medium', Environment: 'medium', Time: 'medium',
+  Optics: 'look',
+};
+
+const hostFor = (group: string, level: 'basic' | 'advanced'): HTMLElement =>
+  $(`${level === 'basic' ? 'basics' : 'adv'}-${TAB_OF[group] ?? 'medium'}`);
+
+const panel = buildControls(hostFor, P, (key, value) => {
   (P as Record<string, unknown>)[key] = value;
   if (key === 'species') applySpecies(String(value));
   if (key === 'acidColor') applyAccent();
@@ -341,6 +358,26 @@ for (const ev of ['pointerup', 'pointercancel'] as const) {
 }
 canvas.addEventListener('pointerleave', () => { renderer.cursor.on = false; probe.hidden = true; });
 
+// The brush is the one setting you adjust without looking away from the plate,
+// so it is on the wheel as well as on its slider. preventDefault only once the
+// gesture is clearly a brush change, or the page stops scrolling past the tool.
+canvas.addEventListener('wheel', (e) => {
+  if (P.tool === 'inspect') return;
+  e.preventDefault();
+  setBrush(P.brush * (e.deltaY > 0 ? 0.92 : 1.087));
+}, { passive: false });
+
+function setBrush(v: number): void {
+  P.brush = Math.round(Math.max(8, Math.min(140, v)));
+  brush.set(P.brush);
+  renderer.cursor.r = P.brush;
+  canvas.parentElement?.classList.add('show-brush');
+  clearTimeout(brushFlash);
+  brushFlash = window.setTimeout(() => canvas.parentElement?.classList.remove('show-brush'), 900);
+  if (!running) draw();
+}
+let brushFlash = 0;
+
 function showProbe(e: PointerEvent, x: number, y: number): void {
   const c = sim.pick(x, y, 16);
   if (!c) { probe.hidden = true; return; }
@@ -501,8 +538,11 @@ addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const n = Number(e.key);
   if (n >= 1 && n <= 6) { const t = TOOLS[n - 1]; syncTools(t); P.tool = t; renderer.cursor.tool = t; $('tool-hint').textContent = TOOL_HINT[t]; say(`Tool: ${t}.`); return; }
+  if (e.key === '[') { setBrush(P.brush * 0.85); return; }
+  if (e.key === ']') { setBrush(P.brush * 1.18); return; }
   switch (e.key.toLowerCase()) {
     case ' ': e.preventDefault(); setRunning(!running); break;
+    case '?': startTour(); break;
     case 's': sim.step(1 / 30, P); draw(); updateAll(); break;
     case 'r': resetSim(); say('Culture reset.'); break;
     case 'n': $('btn-reseed').click(); break;
@@ -560,6 +600,7 @@ function tick(now: number): void {
   const dt = Math.min(1 / 20, Math.max(1 / 240, (now - last) / 1000));
   last = now;
   fps = fps * 0.9 + (1 / dt) * 0.1;
+  if (running) sampleFrame(dt);
 
   if (running && P.view !== 'plate') {
     sim.step(dt, P);
@@ -578,11 +619,163 @@ function tick(now: number): void {
   requestAnimationFrame(tick);
 }
 
-// A slider inside a closed <details> has no width, so its handle cannot be
-// placed until the section opens. Same on any layout change.
+// A slider inside a hidden panel has no width, so its handle cannot be placed
+// until that panel is shown. Same on any layout change.
 function reflowAll(): void { panel.reflow(); rate.reflow(); brush.reflow(); }
 for (const d of document.querySelectorAll('details')) d.addEventListener('toggle', reflowAll);
 addEventListener('resize', reflowAll);
+
+// ── rail tabs ────────────────────────────────────────────────────────────
+// One panel at a time. Forty controls in a single scrolling column is the
+// thing that makes this tool look like a cockpit; the same forty controls
+// behind four words do not.
+function wireTabs(rail: HTMLElement): void {
+  const list = rail.querySelector('.tabs') as HTMLElement | null;
+  if (!list) return;
+  const tabs = [...list.querySelectorAll<HTMLButtonElement>('.tab')];
+  const ind = list.querySelector('.tab-ind') as HTMLElement | null;
+
+  const slide = (): void => {
+    const on = tabs.find((t) => t.getAttribute('aria-selected') === 'true');
+    if (!on || !ind) return;
+    ind.style.width = `${on.offsetWidth}px`;
+    ind.style.transform = `translateX(${on.offsetLeft}px)`;
+  };
+
+  const select = (tab: HTMLButtonElement, focus = false): void => {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      const pane = document.getElementById(t.getAttribute('aria-controls') ?? '');
+      if (pane) pane.hidden = !on;
+    }
+    slide();
+    // Sliders inside the pane that just appeared have only now been given a
+    // width, so their handles have to be placed again.
+    reflowAll();
+    if (focus) tab.focus();
+  };
+
+  list.addEventListener('click', (e) => {
+    const t = (e.target as HTMLElement).closest('.tab') as HTMLButtonElement | null;
+    if (t) select(t);
+  });
+  list.addEventListener('keydown', (e) => {
+    const i = tabs.findIndex((t) => t === document.activeElement);
+    if (i < 0) return;
+    const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    select(tabs[(i + d + tabs.length) % tabs.length], true);
+  });
+
+  for (const t of tabs) t.tabIndex = t.getAttribute('aria-selected') === 'true' ? 0 : -1;
+  requestAnimationFrame(slide);
+  addEventListener('resize', slide);
+  (rail as HTMLElement & { showTab?: (id: string) => void }).showTab = (id: string) => {
+    const t = tabs.find((x) => x.id === id);
+    if (t) select(t);
+  };
+}
+wireTabs($('rail-left'));
+wireTabs($('rail-right'));
+
+const showTab = (railId: string, tabId: string): void => {
+  ($(railId) as HTMLElement & { showTab?: (id: string) => void }).showTab?.(tabId);
+};
+
+// ── performance ──────────────────────────────────────────────────────────
+// The tier caps how much work the plate is allowed to ask for. It never
+// changes the biology — only the resolution it is observed at and the ceiling
+// on population, both of which are already parameters.
+function applyBudget(t: Tier): void {
+  const b = budget(t);
+  if (P.capacity > b.cells) { P.capacity = b.cells; panel.sync(); }
+  if (P.pixelSize < b.pixel) { P.pixelSize = b.pixel; panel.sync(); }
+  renderer.resize(renderer.w, renderer.h, P.pixelSize);
+  for (const r of document.querySelectorAll<HTMLInputElement>('input[name="perf"]')) r.checked = r.value === t;
+}
+onTier(applyBudget);
+for (const r of document.querySelectorAll<HTMLInputElement>('input[name="perf"]')) {
+  r.addEventListener('change', () => {
+    if (!r.checked) return;
+    setTier(r.value as Tier);
+    say(`Rendering quality set to ${r.value}.`);
+  });
+}
+
+// ── the walkthrough ──────────────────────────────────────────────────────
+const TOUR: Step[] = [
+  {
+    target: 'specimen-bar', side: 'bottom',
+    title: 'Type something to grow',
+    body: 'Whatever you type here becomes the growth medium. The letterforms are not drawn — they are the only place on the plate with anything to eat.',
+  },
+  {
+    target: 'plate', side: 'left',
+    title: 'This is a live culture',
+    body: 'Every dot is a cell with its own age, size and genome. Watch a stroke fill in: that is division, not animation.',
+  },
+  {
+    target: 'dock', side: 'top',
+    title: 'The plate is the instrument',
+    body: 'Pick a tool and drag on the plate — paint food and the colony walks towards it, paint antibiotic and watch resistance evolve. Scroll on the plate to resize the brush.',
+  },
+  {
+    target: 'transport', side: 'top',
+    title: 'Run it, or step it',
+    body: 'Incubate runs the culture; Step advances one frame so you can look at it. Rate is how many simulated minutes pass per real second.',
+  },
+  {
+    target: 'rail-left', side: 'right',
+    title: 'Four tabs, not forty dials',
+    body: 'Start has ready-made experiments. Organism is who is growing, Medium is what they are growing in, Look is how it is photographed. Anything deeper is folded away inside each tab.',
+    before: () => showTab('rail-left', 'tab-start'),
+  },
+  {
+    target: 'pane-export', side: 'left',
+    title: 'Then take it with you',
+    body: 'A still at four times size, the cells as SVG geometry, the run as WebM, the numbers as CSV. Everything is made in this tab and nothing is uploaded.',
+    before: () => showTab('rail-right', 'tab-export'),
+  },
+];
+
+function startTour(): void {
+  showTab('rail-right', 'tab-curves');
+  runTour(TOUR, () => { showTab('rail-right', 'tab-curves'); say('Walkthrough finished.'); });
+}
+$('btn-tour').addEventListener('click', startTour);
+
+// ── narrow screens ───────────────────────────────────────────────────────
+// Said once, dismissible, and never in the way of the thing it is describing.
+{
+  const bar = $('deskbar');
+  let hidden = false;
+  try { hidden = localStorage.getItem('agar.deskbar') === '1'; } catch { /* ignore */ }
+  if (!hidden && matchMedia('(max-width: 820px)').matches) bar.hidden = false;
+  $('deskbar-x').addEventListener('click', () => {
+    bar.hidden = true;
+    try { localStorage.setItem('agar.deskbar', '1'); } catch { /* ignore */ }
+  });
+}
+
+// ── the story band ───────────────────────────────────────────────────────
+// Reveal on entry, once, and only as a shortened distance — reduced motion
+// gets the same text with no travel.
+{
+  const beats = [...document.querySelectorAll('.beat, .story-cta')];
+  if (beats.length && !reduced.matches) {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); }
+      }
+    }, { rootMargin: '0px 0px -12% 0px' });
+    for (const b of beats) io.observe(b);
+  } else {
+    for (const b of beats) b.classList.add('is-in');
+  }
+}
 
 // Handle for the console: inspect or drive the culture directly.
 (window as unknown as Record<string, unknown>).AGAR = { sim, P, renderer, step: (dt: number) => sim.step(dt, P) };
@@ -608,6 +801,17 @@ if (footCanvas) {
   });
 }
 
+// The tier has to be known before the first plate is sized, or the machine
+// gets one oversized frame before being told it cannot afford them.
+const tier0 = initPerf();
+applyBudget(tier0);
+
+// Arriving from the Learn page with an organism already chosen.
+{
+  const want = new URLSearchParams(location.search).get('species');
+  if (want && SPECIES_IDS.has(want)) P.species = want;
+}
+
 applyAccent();
 applySpecies(P.species);
 syncTools(P.tool);
@@ -622,3 +826,7 @@ offerResume();
 if (!reduced.matches) setRunning(true);
 else say('Reduced motion is on, so the culture starts paused. Press Incubate or Space to begin.');
 if (hasImportedFont()) fontStatus.textContent = `Culturing “${importedFontName()}”.`;
+
+// First visit gets the walkthrough, once, after the boot overlay has cleared.
+// Anyone who has seen it never sees it again unless they ask for it.
+if (!tourSeen()) setTimeout(startTour, reduced.matches ? 400 : 5400);
