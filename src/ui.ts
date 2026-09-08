@@ -222,11 +222,13 @@ export function buildOrganisms(root: HTMLElement, p: Params, pick: (id: string) 
     const name = document.createElement('span');
     name.className = 'org-name';
     name.textContent = s.label;
-    const sub = document.createElement('span');
-    sub.className = 'org-sub';
-    sub.textContent = s.short;
-    lbl.append(input, fig, name, sub);
-    lbl.title = s.note;
+    lbl.append(input, fig, name);
+    // The one-line descriptor used to sit under the name. On a strip it would
+    // force every chip to the width of the longest one, so it moves to the
+    // accessible name and the tooltip, and the full note appears in the rail
+    // once the organism is selected.
+    lbl.title = `${s.short} — ${s.note}`;
+    input.setAttribute('aria-label', `${s.label}. ${s.short}.`);
     root.appendChild(lbl);
     inputs.push(input);
   }

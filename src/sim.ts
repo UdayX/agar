@@ -22,6 +22,10 @@ export const ALIVE = 0, SENESCENT = 1, DEAD = 2, SPORE = 3;
 const SUBSTRATE_COST = 0.35;
 /** Light falls off as a Gaussian with this radius, in pixels. */
 const BEACON_SIGMA = 130;
+// °C above the incubator at the centre of one beacon, per unit of output. A
+// lamp is a lamp: it puts out photons and it puts out warmth, and everything on
+// the plate feels the second one whether or not it can use the first.
+const BEACON_HEAT = 15;
 /**
  * µm/s → px/s. Real swim speeds relative to real cell sizes are far too fast to
  * read on a screen this size, so motion carries a legibility scale. Everything
@@ -137,15 +141,33 @@ export class Sim {
 
   private baseRadius(): number { return this.sp.radius * this.p.cellScale * 4; }
 
-  /** Light from all beacons at a point, as an extra substrate for phototrophs. */
-  lightAt(x: number, y: number): number {
-    if (!this.beacons.length) return 0;
+  /** Summed beacon falloff, 1.0 at the centre of a single beacon. */
+  private beaconField(x: number, y: number): number {
     let l = 0;
     for (const b of this.beacons) {
       const dx = x - b.x, dy = y - b.y;
       l += Math.exp(-(dx * dx + dy * dy) / (2 * BEACON_SIGMA * BEACON_SIGMA));
     }
-    return l * this.p.light;
+    return l;
+  }
+
+  /** Light from all beacons at a point, as an extra substrate for phototrophs. */
+  lightAt(x: number, y: number): number {
+    if (!this.beacons.length) return 0;
+    return this.beaconField(x, y) * this.p.light;
+  }
+
+  /**
+   * Radiant heat from all beacons at a point, in °C above the incubator.
+   *
+   * This is the half of a beacon that every organism feels. Only the
+   * cyanobacterium can eat the light, but a thermophile stranded at room
+   * temperature will grow in the warm halo and nowhere else, and a mesophile
+   * sitting at its optimum will cook a dead ring directly under the lamp.
+   */
+  heatAt(x: number, y: number): number {
+    if (!this.beacons.length) return 0;
+    return this.beaconField(x, y) * this.p.light * BEACON_HEAT;
   }
 
   private makeCell(x: number, y: number, lineage: number): Cell {
@@ -318,7 +340,13 @@ export class Sim {
     this.t += dtBio;
 
     const r = this.rng;
-    const muMax = (Math.LN2 / Math.max(1, p.doubling)) * tempFactor(p.temperature, this.sp.topt, this.sp.tmax);
+    // Without beacons the whole plate is one temperature and this is computed
+    // once. With them it has to be per cell, so it is hoisted only as the value
+    // used when nothing is lit.
+    const muAt = (T: number): number =>
+      (Math.LN2 / Math.max(1, p.doubling)) * tempFactor(T, this.sp.topt, this.sp.tmax);
+    const muMaxAmbient = muAt(p.temperature);
+    const warmed = this.beacons.length > 0 && p.light > 0;
     const baseR = this.baseRadius();
     const isHypha = this.sp.shape === 'hypha';
     const isPhago = this.sp.phagotroph;
@@ -362,6 +390,7 @@ export class Sim {
       // ── metabolism (Monod 1949) ──────────────────────────────────────
       const ks = Math.max(0.005, p.ks * c.g.ks);
       const avail = S + lit;
+      const muMax = warmed ? muAt(p.temperature + this.heatAt(c.x, c.y)) : muMaxAmbient;
       const mu = muMax * c.g.mu * (avail / (ks + avail));
       c.mu = muMax > 0 ? mu / muMax : 0;
 

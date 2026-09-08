@@ -3,9 +3,9 @@
  *
  * Anchored coach marks, not a modal carousel: the plate has to stay visible and
  * running while it is being explained, because what it is doing is the thing
- * being explained. The spotlight is a transparent box with an enormous shadow,
- * which is the only way to punch a hole in an overlay that still lets the
- * element underneath be seen and clicked.
+ * being explained. The dim is one full-viewport layer with a rectangular hole
+ * cut by clip-path, so the element underneath stays visible and clickable and
+ * the hole glides between steps without a single layout or repaint.
  *
  * It runs once, on a first visit, and can be replayed from the header for ever
  * after. Anything a person can be shown twice must be dismissible in one key.
@@ -35,21 +35,25 @@ export function runTour(steps: Step[], onEnd?: () => void): void {
   const root = document.createElement('div');
   root.className = 'tour';
   root.innerHTML = `
+    <div class="tour-dim" aria-hidden="true"></div>
     <div class="tour-spot" aria-hidden="true"></div>
     <div class="tour-card" role="dialog" aria-modal="false" aria-labelledby="tour-title" tabindex="-1">
-      <p class="tour-step"></p>
-      <h2 class="tour-h" id="tour-title"></h2>
-      <p class="tour-body"></p>
-      <div class="tour-actions">
-        <button class="btn small ghost" type="button" data-act="end">Skip</button>
-        <div class="tour-nav">
-          <button class="btn small" type="button" data-act="back">Back</button>
-          <button class="btn small primary" type="button" data-act="next">Next</button>
+      <div class="tour-card-in">
+        <p class="tour-step"></p>
+        <h2 class="tour-h" id="tour-title"></h2>
+        <p class="tour-body"></p>
+        <div class="tour-actions">
+          <button class="btn small ghost" type="button" data-act="end">Skip</button>
+          <div class="tour-nav">
+            <button class="btn small" type="button" data-act="back">Back</button>
+            <button class="btn small primary" type="button" data-act="next">Next</button>
+          </div>
         </div>
       </div>
     </div>`;
   document.body.appendChild(root);
 
+  const dim = root.querySelector('.tour-dim') as HTMLElement;
   const spot = root.querySelector('.tour-spot') as HTMLElement;
   const card = root.querySelector('.tour-card') as HTMLElement;
   const elStep = root.querySelector('.tour-step') as HTMLElement;
@@ -66,15 +70,42 @@ export function runTour(steps: Step[], onEnd?: () => void): void {
     if (!el) { end(); return; }
 
     const r = el.getBoundingClientRect();
-    spot.style.left = `${r.left - PAD}px`;
-    spot.style.top = `${r.top - PAD}px`;
+    const vw = innerWidth, vh = innerHeight;
+
+    spot.style.transform = `translate3d(${r.left - PAD}px, ${r.top - PAD}px, 0)`;
     spot.style.width = `${r.width + PAD * 2}px`;
     spot.style.height = `${r.height + PAD * 2}px`;
+
+    // The dim is one shape the size of the overlay with a rectangular hole cut
+    // out of it: trace the outside, trace the hole, let `evenodd` decide what is
+    // inside. Three things this depends on, all learned by getting them wrong:
+    //
+    //   · `evenodd`, not the default `nonzero`. Relying on opposing winding
+    //     directions works only while the hole sits strictly inside the outer
+    //     ring. The moment a highlighted element is wider than the ring — which
+    //     most of the rails are — the windings stop cancelling cleanly and the
+    //     whole layer is clipped away, dimming nothing at all.
+    //   · the ring is measured from the element, not from innerWidth. clip-path
+    //     resolves against the element's own border box, and a vertical
+    //     scrollbar makes that ~15px narrower than the viewport. Drawing the
+    //     ring 15px too wide overhangs the box and clips everything away — the
+    //     same failure, from the other end.
+    //   · the hole is clamped to that box, so it can never overhang either. An
+    //     element scrolled half off screen still gets a hole, just a cropped one.
+    //
+    // The point count must stay at ten in every step, or clip-path will snap
+    // between steps instead of interpolating.
+    const bw = dim.clientWidth, bh = dim.clientHeight;
+    const cl = (v: number, max: number): number => (v < 0 ? 0 : v > max ? max : v);
+    const x0 = cl(r.left - PAD, bw), y0 = cl(r.top - PAD, bh);
+    const x1 = cl(r.right + PAD, bw), y1 = cl(r.bottom + PAD, bh);
+    dim.style.clipPath =
+      `polygon(evenodd, 0px 0px, ${bw}px 0px, ${bw}px ${bh}px, 0px ${bh}px, 0px 0px, ` +
+      `${x0}px ${y0}px, ${x1}px ${y0}px, ${x1}px ${y1}px, ${x0}px ${y1}px, ${x0}px ${y0}px)`;
 
     const cw = card.offsetWidth || 300;
     const ch = card.offsetHeight || 160;
     const gap = 16;
-    const vw = innerWidth, vh = innerHeight;
 
     let side = s.side ?? 'bottom';
     if (side === 'bottom' && r.bottom + gap + ch > vh) side = 'top';
@@ -88,15 +119,19 @@ export function runTour(steps: Step[], onEnd?: () => void): void {
     else if (side === 'right') { x = r.right + gap; y = r.top; }
     else { x = r.left - gap - cw; y = r.top; }
 
-    card.style.left = `${Math.max(12, Math.min(vw - cw - 12, x))}px`;
-    card.style.top = `${Math.max(12, Math.min(vh - ch - 12, y))}px`;
+    card.style.transform =
+      `translate3d(${Math.max(12, Math.min(vw - cw - 12, x))}px, ` +
+      `${Math.max(12, Math.min(vh - ch - 12, y))}px, 0)`;
   };
 
   const show = (): void => {
     const s = live[i];
     s.before?.();
     const el = document.getElementById(s.target);
-    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    el?.scrollIntoView({
+      block: 'nearest',
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
     elStep.textContent = `Step ${i + 1} of ${live.length}`;
     elTitle.textContent = s.title;
     elBody.textContent = s.body;

@@ -311,7 +311,7 @@ export const CONTROLS: Control[] = [
   { key: 'shear', group: 'Environment', label: 'Flow / shear', kind: 'range', min: -30, max: 30, step: 0.5, unit: 'µm/s', level: 'advanced',
     help: 'Bulk medium flow. Detaches weakly adherent cells and smears the colony downstream.' },
   { key: 'light', group: 'Environment', label: 'Beacon output', kind: 'range', min: 0, max: 4, step: 0.05, level: 'advanced',
-    help: 'Brightness of light beacons placed with the light tool. Photoautotrophs feed on this instead of the medium.' },
+    help: 'Output of the beacons placed with the light tool — photons and warmth together. Photoautotrophs feed on the light instead of the medium; everything else only feels the heat, which is added to the incubator temperature locally and can push a cell past its ceiling.' },
 
   // Optics
   { key: 'view', group: 'Optics', label: 'View', kind: 'select', level: 'basic',

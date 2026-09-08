@@ -41,7 +41,7 @@ const TOOL_HINT: Record<string, string> = {
   inspect: 'Hover a cell to read its genome and state.',
   feed: 'Drag on the plate to paint nutrient. Motile cells will find it.',
   toxin: 'Drag to paint antibiotic. Cells below their inherited MIC die; the rest flee the gradient.',
-  light: 'Click to drop a light beacon. Photoautotrophs feed on it and swim toward it.',
+  light: 'Click to drop a beacon. It feeds photoautotrophs and warms the plate around it — a thermophile will only grow in the halo, and a mesophile will cook under one.',
   inoculate: 'Drag to add cells of the selected organism.',
   scrape: 'Drag to scrape cells off the plate.',
 };
@@ -381,6 +381,7 @@ let brushFlash = 0;
 function showProbe(e: PointerEvent, x: number, y: number): void {
   const c = sim.pick(x, y, 16);
   if (!c) { probe.hidden = true; return; }
+  const heat = sim.heatAt(c.x, c.y);
   const state = c.state === DEAD ? 'lysed' : c.state === 1 ? 'senescent' : c.state === 3 ? 'spore' : 'alive';
   probe.textContent =
     `cell #${c.id} · ${state}\n` +
@@ -388,12 +389,15 @@ function showProbe(e: PointerEvent, x: number, y: number): void {
     `age ${(c.age / 60).toFixed(1)} h · size ${c.size.toFixed(2)}\n` +
     `growth ${(c.mu * 100).toFixed(0)}% of max\n` +
     `MIC ${c.g.resistance.toFixed(2)} · speed ×${c.g.speed.toFixed(2)}\n` +
-    `organelles ${c.organelles}`;
+    `organelles ${c.organelles}` +
+    // Only worth a line when a beacon is actually changing it — otherwise this
+    // is the incubator setting, which is already on a slider.
+    (heat >= 0.5 ? `\nlocal ${(P.temperature + heat).toFixed(0)} °C (+${heat.toFixed(0)} from beacons)` : '');
   const wrap = canvas.parentElement as HTMLElement;
   const wr = wrap.getBoundingClientRect();
   probe.hidden = false;
   probe.style.left = `${Math.min(wr.width - 250, e.clientX - wr.left + 14)}px`;
-  probe.style.top = `${Math.min(wr.height - 110, e.clientY - wr.top + 14)}px`;
+  probe.style.top = `${Math.min(wr.height - 130, e.clientY - wr.top + 14)}px`;
 }
 
 // ── font import ──────────────────────────────────────────────────────────
@@ -533,8 +537,22 @@ setInterval(saveCulture, 20000);
 const KERNELS = ['bayer2', 'bayer4', 'bayer8', 'floyd', 'atkinson', 'jarvis', 'noise', 'halftone', 'none'] as const;
 const TOOLS = ['inspect', 'feed', 'toxin', 'light', 'inoculate', 'scrape'] as const;
 addEventListener('keydown', (e) => {
-  const el = document.activeElement;
-  if (el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.getAttribute('role') === 'slider')) return;
+  const el = document.activeElement as HTMLElement | null;
+  // Bail only where the key already means something to the focused control:
+  // a text field is being typed into, a slider is being nudged, and Space has a
+  // defined action on a button, a link, a disclosure or a checkbox. Everything
+  // else — crucially the radio inputs behind the organism, tool and mode
+  // pickers, which is where focus sits most of the time — falls through to the
+  // shortcuts below. Treating every <input> as typing is what made Space stop
+  // working the moment anyone chose an organism.
+  const tag = el?.tagName ?? '';
+  const type = (el as HTMLInputElement | null)?.type ?? '';
+  const typing = tag === 'TEXTAREA' || tag === 'SELECT'
+    || (tag === 'INPUT' && !/^(radio|hidden)$/.test(type));
+  const nativeSpace = tag === 'BUTTON' || tag === 'SUMMARY'
+    || (tag === 'A' && el!.hasAttribute('href'));
+  if (typing || el?.isContentEditable || el?.getAttribute('role') === 'slider') return;
+  if (nativeSpace && (e.key === ' ' || e.key === 'Enter')) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const n = Number(e.key);
   if (n >= 1 && n <= 6) { const t = TOOLS[n - 1]; syncTools(t); P.tool = t; renderer.cursor.tool = t; $('tool-hint').textContent = TOOL_HINT[t]; say(`Tool: ${t}.`); return; }

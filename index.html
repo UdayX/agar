@@ -119,8 +119,7 @@
     </div>
 
     <div class="pane" role="tabpanel" id="pane-organism" aria-labelledby="tab-organism" tabindex="0" hidden>
-      <p class="pane-lede">Who is growing. Each one behaves differently because its numbers are different.</p>
-      <div class="org-grid" id="organisms" role="radiogroup" aria-label="Choose an organism"></div>
+      <p class="pane-lede">Who is growing. Pick one on the strip under the plate; these are its numbers.</p>
       <p class="note" id="org-note"></p>
       <a class="pane-link" href="learn.html">Read about all nine organisms <span aria-hidden="true">→</span></a>
       <div class="pane-basics" id="basics-organism"></div>
@@ -198,6 +197,11 @@
         <button class="btn small ghost" id="btn-clear-light" type="button" aria-label="Clear all light beacons">Clear</button>
       </div>
     </div>
+
+    <!-- The organism is the first decision and it changes what every other
+         control means, so it sits against the plate rather than three tabs deep
+         in a settings column. -->
+    <div class="org-strip" id="organisms" role="radiogroup" aria-label="Choose an organism"></div>
 
     <div class="transport" id="transport">
       <button class="btn primary" id="btn-play" type="button" aria-pressed="false">Incubate</button>

@@ -260,17 +260,29 @@ main.stage {
 .specimen:focus-within .specimen-help { color: var(--ink-3); }
 
 /* ── organism picker ───────────────────────────────────────────────────── */
-.org-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s1); }
+/* A strip, not a grid. Nine chips sized to their own names, wrapping when the
+   column is narrow — which is why the names never break, however tight it gets.
+   The grid this replaced gave every card the same third of a 300px rail, so
+   "Cyanobacterium" had to hyphenate into two lines and drag all nine cards to
+   that height. */
+.org-strip {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s1);
+  padding: var(--s3) var(--pad);
+  border-top: 1px solid var(--line-2); background: var(--panel);
+}
 .org {
-  position: relative; display: block; padding: var(--s3) var(--s2) var(--s2); text-align: center;
+  position: relative;
+  display: inline-flex; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s3);
   border: 1px solid var(--line); cursor: pointer;
-  transition: border-color var(--fast) ease, background var(--fast) ease, transform var(--fast) var(--ease-out);
+  white-space: nowrap;
+  transition: border-color var(--fast) ease, background var(--fast) ease,
+              transform var(--fast) var(--ease-out);
 }
 .org input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
-.org-icon { display: block; color: var(--ink-3); transition: color var(--fast) ease; }
-.org-icon svg { width: 26px; height: 26px; display: block; margin: 0 auto; }
-.org-name { display: block; font-size: 10px; letter-spacing: 0.03em; margin-top: var(--s1); }
-.org-sub { display: block; font-size: 9px; color: var(--ink-3); line-height: 1.35; margin-top: 2px; }
+.org-icon { display: block; flex: none; color: var(--ink-3); transition: color var(--fast) ease; }
+.org-icon svg { width: 20px; height: 20px; display: block; }
+.org-name { display: block; font-size: 10.5px; letter-spacing: 0.03em; }
 .org:active { transform: scale(0.97); }
 .org:has(input:checked) { border-color: var(--ink); background: var(--acid-soft); }
 .org:has(input:checked) .org-icon { color: var(--ink); }
@@ -652,7 +664,6 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
   #rail-left, #rail-right { border-top: 1px solid var(--line-2); border-left: 0; overflow: visible; }
   main.stage { border-bottom: 1px solid var(--line-2); }
   .canvas-wrap { padding: var(--s4) var(--s4) 80px; }
-  .org-grid { grid-template-columns: repeat(4, 1fr); }
   .foot-top { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: var(--s6); }
   .foot-lede { grid-column: 1 / -1; }
 }
@@ -664,7 +675,6 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
     grid-template-areas: "head" "stage" "left" "right";
   }
   #rail-left { border-right: 0; }
-  .org-grid { grid-template-columns: repeat(3, 1fr); }
   .readout .cellstat { min-width: 0; padding: var(--s3); }
   .canvas-wrap { padding-bottom: 80px; }
   .tool-hint { display: none; }
@@ -679,7 +689,6 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
 
 @media (max-width: 560px) {
   :root { --pad: var(--s3); }
-  .org-grid { grid-template-columns: repeat(2, 1fr); }
   .logo { height: 14px; }
   .live .live-txt { display: none; }
   .specimen { flex-wrap: wrap; gap: var(--s2); }
@@ -841,30 +850,44 @@ html[data-perf="low"] .pane:not([hidden]) { animation: none; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    WALKTHROUGH
-   A spotlight is a transparent box with an enormous shadow: it is the only
-   way to dim a page and leave one element lit, visible and still clickable.
+   The dim is one full-viewport layer with a rectangular hole cut by clip-path,
+   which leaves one element lit, visible and still clickable — and, unlike the
+   box-shadow this used to be, moves between steps on the compositor alone.
    ═══════════════════════════════════════════════════════════════════════════ */
 .tour { position: fixed; inset: 0; z-index: 150; pointer-events: none; }
-.tour-spot {
-  position: fixed; border: 1px solid var(--acid-line);
-  box-shadow: 0 0 0 9999px rgba(17, 17, 17, 0.42);
+.tour-dim {
+  position: fixed; inset: 0;
+  background: rgba(17, 17, 17, 0.42);
   opacity: 0;
   transition: opacity var(--med) var(--ease-out),
-              left var(--med) var(--ease-out), top var(--med) var(--ease-out),
+              clip-path var(--med) var(--ease-out);
+}
+.tour.is-in .tour-dim { opacity: 1; }
+.tour.is-out .tour-dim { opacity: 0; }
+.tour-spot {
+  position: fixed; left: 0; top: 0;
+  border: 1px solid var(--acid-line);
+  opacity: 0;
+  transition: opacity var(--med) var(--ease-out),
+              transform var(--med) var(--ease-out),
               width var(--med) var(--ease-out), height var(--med) var(--ease-out);
 }
 .tour.is-in .tour-spot { opacity: 1; }
 .tour-card {
-  position: fixed; width: min(320px, calc(100vw - 24px));
+  position: fixed; left: 0; top: 0;
+  width: min(320px, calc(100vw - 24px));
+  pointer-events: auto;
+  transition: transform var(--med) var(--ease-out);
+}
+.tour-card-in {
   background: var(--panel); border: 1px solid var(--ink);
   padding: var(--s4) var(--s4) var(--s3);
-  pointer-events: auto;
   opacity: 0; transform: scale(0.985);
-  transition: opacity var(--med) var(--ease-out), transform var(--med) var(--ease-out),
-              left var(--med) var(--ease-out), top var(--med) var(--ease-out);
+  transition: opacity var(--med) var(--ease-out), transform var(--med) var(--ease-out);
 }
-.tour.is-in .tour-card { opacity: 1; transform: none; }
-.tour.is-out .tour-card, .tour.is-out .tour-spot { opacity: 0; }
+.tour.is-in .tour-card-in { opacity: 1; transform: none; }
+.tour.is-out .tour-card-in { opacity: 0; }
+.tour.is-out .tour-spot { opacity: 0; }
 .tour-card:focus-visible { outline: 2px solid var(--acid-line); outline-offset: 2px; }
 .tour-step {
   margin: 0 0 var(--s2); font-size: 9px; letter-spacing: 0.2em;
@@ -1130,7 +1153,7 @@ html[data-perf="low"] .beat, html[data-perf="low"] .story-cta { transition-durat
 
 @media (prefers-reduced-motion: reduce) {
   .beat, .story-cta { opacity: 1; transform: none; transition: none; }
-  .tour-spot, .tour-card { transition-duration: 0.01ms; }
+  .tour-dim, .tour-spot, .tour-card, .tour-card-in { transition-duration: 0.01ms; }
   .od-panel { transition-duration: 0.01ms; }
 }
 
