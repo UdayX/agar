@@ -767,6 +767,10 @@ for (const r of document.querySelectorAll<HTMLInputElement>('input[name="perf"]'
 }
 
 // ── the walkthrough ──────────────────────────────────────────────────────
+// Assigned by the sheet controller further down. The walkthrough is defined
+// before it and only ever calls it later, from a step's `before` hook.
+let openSheet: (side: string | null) => void = () => {};
+
 const TOUR: Step[] = [
   {
     target: 'specimen-bar', side: 'bottom',
@@ -792,35 +796,78 @@ const TOUR: Step[] = [
     target: 'rail-left', side: 'right',
     title: 'Four tabs, not forty dials',
     body: 'Start has ready-made experiments. Organism is who is growing, Medium is what they are growing in, Look is how it is photographed. Anything deeper is folded away inside each tab.',
-    before: () => showTab('rail-left', 'tab-start'),
+    before: () => { showTab('rail-left', 'tab-start'); openSheet('left'); },
   },
   {
     target: 'pane-export', side: 'left',
     title: 'Then take it with you',
     body: 'A still at four times size, the cells as SVG geometry, the run as WebM, the numbers as CSV. Everything is made in this tab and nothing is uploaded.',
-    before: () => showTab('rail-right', 'tab-export'),
+    before: () => { showTab('rail-right', 'tab-export'); openSheet('right'); },
   },
 ];
 
 function startTour(): void {
   showTab('rail-right', 'tab-curves');
-  runTour(TOUR, () => { showTab('rail-right', 'tab-curves'); say('Walkthrough finished.'); });
+  runTour(TOUR, () => {
+    openSheet(null);                       // steps 5 and 6 may have raised one
+    showTab('rail-right', 'tab-curves');
+    say('Walkthrough finished.');
+  });
 }
 $('btn-tour').addEventListener('click', startTour);
 
-// ── narrow screens ───────────────────────────────────────────────────────
-// Said once, dismissible, and never in the way of the thing it is describing.
+// ── the rails, as sheets ─────────────────────────────────────────────────
+// Below 820 the two rails are bottom sheets rather than columns. The CSS does
+// the whole of the layout; this only says which one is open, and puts focus
+// where a person can act on it and back where they left it. The closed sheet is
+// `visibility: hidden`, so it leaves the tab order without any help from here.
 {
-  const bar = $('deskbar');
-  let hidden = false;
-  try { hidden = localStorage.getItem('agar.deskbar') === '1'; } catch { /* ignore */ }
-  if (!hidden && matchMedia('(max-width: 820px)').matches) bar.hidden = false;
-  $('deskbar-x').addEventListener('click', () => {
-    // Leave the way it arrived, then take the space back.
-    bar.classList.add('is-out');
-    setTimeout(() => { bar.hidden = true; }, reduced.matches ? 0 : 280);
-    try { localStorage.setItem('agar.deskbar', '1'); } catch { /* ignore */ }
-  });
+  const root = document.documentElement;
+  const OPENERS: Record<string, string> = { left: 'btn-sheet-left', right: 'btn-sheet-right' };
+  let last: HTMLElement | null = null;
+
+  openSheet = (side: string | null): void => {
+    const was = root.dataset.sheet ?? null;
+    if (was === side) return;
+    if (was) $(OPENERS[was]).setAttribute('aria-expanded', 'false');
+
+    if (side) {
+      last = document.activeElement as HTMLElement | null;
+      root.dataset.sheet = side;
+      $(OPENERS[side]).setAttribute('aria-expanded', 'true');
+      // The handle is the first thing in the sheet and the thing that closes
+      // it, so landing on it means the way out is already under the thumb.
+      ($(`rail-${side}`).querySelector('.sheet-close') as HTMLElement).focus();
+    } else {
+      delete root.dataset.sheet;
+      // Back to the opener, not merely to whatever held focus before. The sheet
+      // can be dismissed from the scrim or from Escape, and in both cases focus
+      // is sitting on the handle inside a panel that is about to become
+      // `visibility: hidden` — leaving it there strands the caret on nothing.
+      const back = last && last !== document.body ? last : (was ? $(OPENERS[was]) : null);
+      back?.focus();
+      last = null;
+    }
+  };
+
+  for (const [side, id] of Object.entries(OPENERS)) {
+    $(id).addEventListener('click', () => openSheet(root.dataset.sheet === side ? null : side));
+  }
+  for (const b of document.querySelectorAll<HTMLElement>('.sheet-close')) {
+    b.addEventListener('click', () => openSheet(null));
+  }
+  $('sheet-scrim').addEventListener('click', () => openSheet(null));
+  // Capture, so Escape closes the sheet before anything inside it reads the key.
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && root.dataset.sheet) { e.preventDefault(); openSheet(null); }
+  }, true);
+  // The exact condition under which the rails are sheets at all — the same one
+  // the stylesheet uses. Growing past the width, or turning a phone on its side
+  // and dropping under the height, puts them back on screen as columns; a sheet
+  // still marked open would leave its opener claiming aria-expanded on a button
+  // that is no longer displayed.
+  matchMedia('(max-width: 820px) and (min-height: 521px)')
+    .addEventListener('change', (e) => { if (!e.matches) openSheet(null); });
 }
 
 // ── the story band ───────────────────────────────────────────────────────

@@ -89,6 +89,13 @@ body {
 
 /* ── shell ─────────────────────────────────────────────────────────────── */
 #app {
+  /* The sheets below position against this box rather than the viewport. An
+     ancestor carrying a transform or a filter becomes the containing block for
+     `position: fixed`, and this element carries both during the boot handoff —
+     so a fixed sheet would hang off the blurred, scaled #app for the first
+     700 ms and land 377 px high. Anchoring to #app on purpose, which is exactly
+     100dvh on a phone anyway, makes that whole class of bug impossible. */
+  position: relative;
   display: grid;
   grid-template-columns: var(--rail) minmax(0, 1fr) var(--rail);
   grid-template-rows: var(--head) minmax(0, 1fr);
@@ -691,6 +698,14 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
 .refs b { color: var(--ink); font-weight: 600; }
 .refs .used { color: var(--ink-3); display: block; margin-top: var(--s2); max-width: 62ch; }
 
+/* ── sheets ────────────────────────────────────────────────────────────── */
+/* On a phone the two rails stop being columns and become bottom sheets. They
+   keep their markup, their tabs, their scrolling and their focus order — only
+   their position changes — so there is one interface here, not two. All three
+   of these controls exist solely for that layout and are display:none wherever
+   the rails are already on screen; nothing is ever offered to a person twice. */
+.sheet-open, .sheet-close, .sheet-scrim { display: none; }
+
 /* ── responsive ────────────────────────────────────────────────────────── */
 /* Below three columns the plate stays on top and the two rails sit side by
    side, so parameters and instruments are still one scroll apart. */
@@ -712,18 +727,145 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
   .foot-lede { grid-column: 1 / -1; }
 }
 
+/* Below 820 the plate is the page. Everything left in the flow is a single
+   band of fixed height, so the plate takes the whole remainder — where before
+   the organism strip wrapped to five rows and the transport to three, between
+   them eating 343 px of a 585 px stage and leaving the plate an 18 px box it
+   promptly overflowed and hid under its own dock. */
 @media (max-width: 820px) {
+  /* Height of the sheet's grab handle. The sticky tabs below it key off the
+     same value, so the coarse-pointer bump cannot slide them underneath. */
+  :root { --grip-h: 31px; }
+
   #app {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(560px, 72dvh) auto auto;
-    grid-template-areas: "head" "stage" "left" "right";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: "head" "stage";
+    height: 100dvh;
   }
-  #rail-left { border-right: 0; }
-  .readout .cellstat { min-width: 0; padding: var(--s3); }
-  .canvas-wrap { padding-bottom: 80px; }
+
+  /* One header row, scrolled rather than wrapped. Two rows of chrome is two
+     rows the plate does not get. */
+  header.bar {
+    flex-wrap: nowrap; height: auto; padding: var(--s2) var(--pad);
+    gap: var(--s3); overflow-x: auto; scrollbar-width: none;
+  }
+  header.bar::-webkit-scrollbar { display: none; }
+  header.bar > * { flex: none; }
+  header.bar .spacer { flex: 1 0 var(--s2); }
+  .tagline { display: none; }
+
+  /* The specimen field is the subject of the tool and stays, but the label and
+     the hint are scaffolding around a field whose placeholder already says it. */
+  .specimen { gap: var(--s3); padding: var(--s2) var(--pad); }
+  .specimen-lab, .specimen-help { display: none; }
+  .specimen-in { font-size: 16px; }   /* 16px or iOS zooms the page on focus */
+
+  .readout .cellstat { min-width: 0; padding: var(--s2) var(--s3); }
+  .readout .v { font-size: 13px; }
+
+  main.stage { min-height: 0; }
+  /* The dock is 58px tall. Pinning its offset here rather than inheriting the
+     desktop --s5 is what keeps it inside the reserve below at every mobile
+     width, instead of only under 560. */
+  .dock { bottom: var(--s3); }
+  .canvas-wrap { padding: var(--s3) var(--s3) 78px; }   /* 58 dock + 12 offset + air */
   .tool-hint { display: none; }
-  .rate-group { flex-basis: 100%; }
-  .transport .scrub { max-width: none; }
+
+  /* Both of these were wrapping blocks. One row that scrolls loses nothing and
+     costs a band instead of a third of the screen. */
+  .org-strip {
+    flex-wrap: nowrap; justify-content: flex-start;
+    gap: var(--s2); padding: var(--s2) var(--pad);
+    overflow-x: auto; scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .org-strip::-webkit-scrollbar { display: none; }
+  .org { flex: none; scroll-snap-align: center; }
+
+  .transport {
+    flex-wrap: nowrap; gap: var(--s2); padding: var(--s2) var(--pad);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .transport::-webkit-scrollbar { display: none; }
+  .transport > * { flex: none; }
+  .rate-group { flex: none; min-width: 0; gap: var(--s2); }
+  .transport .scrub { flex: none; width: 96px; min-width: 0; }
+  .transport output { min-width: 0; }
+
+  /* ── the rails, as sheets ──────────────────────────────────────────────── */
+  /* Setup and Data are the only way into any parameter on a phone, and in a
+     horizontal scroller they sat last — off screen behind six buttons nobody
+     reaches for first. Incubate, then the two doors, then the rest. */
+  .transport > * { order: 2; }
+  #btn-play { order: 0; }
+  .sheet-open { order: 1; display: inline-flex; align-items: center; gap: var(--s2); }
+  /* A caret that points the way the panel arrives: these open something, they
+     do not do something, and the row gives no other clue which is which. */
+  .sheet-open::after {
+    content: ""; width: 6px; height: 6px; flex: none;
+    border-left: 1px solid currentColor; border-top: 1px solid currentColor;
+    transform: translateY(1px) rotate(45deg);
+  }
+  .transport .sep { display: none; }
+  /* Ordered after the rails in the DOM but drawn under them, so a sheet covers
+     the scrim that dismisses it rather than the other way round. */
+  .sheet-scrim {
+    display: block; position: absolute; inset: 0; z-index: 95;
+    background: rgba(17, 17, 17, 0.42);
+    /* Transparent is not absent: at opacity 0 this is still a viewport-sized
+       click target sitting directly over the plate. It takes a pointer only
+       while it is actually up. */
+    opacity: 0; pointer-events: none;
+    transition: opacity var(--med) var(--ease-out);
+  }
+  html[data-sheet] .sheet-scrim { opacity: 1; pointer-events: auto; }
+
+  #rail-left, #rail-right {
+    position: absolute; z-index: 96; inset: auto 0 0 0;
+    grid-area: auto;
+    height: min(74dvh, 620px);
+    border: 0; border-top: 1px solid var(--ink);
+    box-shadow: 0 -18px 40px -24px rgba(0, 0, 0, 0.55);
+    /* Off screen and out of the tab order until summoned. `visibility` is what
+       takes it out — a sheet merely translated away is still focusable, and a
+       Tab into an invisible panel is the worst kind of broken. */
+    transform: translateY(100%); visibility: hidden;
+    transition: transform var(--med) var(--ease-out),
+                visibility var(--med) step-end;
+  }
+  /* The page keeps scrolling past #app to the story and the footer. While a
+     sheet is up that has to stop, or the sheet leaves with it. */
+  html[data-sheet], html[data-sheet] body { overflow: hidden; }
+
+  html[data-sheet="left"] #rail-left,
+  html[data-sheet="right"] #rail-right {
+    transform: none; visibility: visible;
+    transition: transform var(--med) var(--ease-out),
+                visibility var(--med) step-start;
+  }
+
+  /* The grab handle is a real button, not a decorative bar: a sheet you can
+     only dismiss with a key you do not have is a sheet you cannot dismiss. */
+  .sheet-close {
+    display: block; position: sticky; top: 0; z-index: 6;
+    width: 100%; height: var(--grip-h); padding: 0;
+    background: var(--panel); border: 0; cursor: pointer;
+  }
+  .sheet-grip {
+    display: block; width: 36px; height: 3px; margin: 0 auto;
+    position: relative; top: calc(50% - 1.5px);
+    background: var(--line-2);
+    transition: background var(--fast) ease;
+  }
+  .sheet-close:active .sheet-grip { background: var(--ink-3); }
+  .sheet-close:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px; }
+  /* Both are sticky, so the tabs must start exactly where the handle ends.
+     One variable, or a coarse-pointer bump silently slides them under it.
+     Qualified by .rail because the base `.tabs { top: 0 }` is declared later in
+     this file, and at equal specificity the last rule wins. */
+  .rail .tabs { top: var(--grip-h); }
+
   .foot-meta-end { margin-left: 0; }
   .refs li { grid-template-columns: 1fr; gap: 0; }
   .refs li::before { grid-column: 1; margin-bottom: var(--s2); }
@@ -731,24 +873,50 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
   .doc-title { font-size: 24px; }
 }
 
+/* A landscape phone has no room for five bands and a plate: at 740x360 the
+   header, specimen, readout, strip and transport take 265 px of 360, which is
+   the original bug all over again. Below this height the lab stops pretending
+   to be one screenful — the page scrolls, the stage gets a floor, and the rails
+   go back in the flow, because a sheet over a 360 px viewport is not a sheet,
+   it is the whole screen. */
+@media (max-width: 820px) and (max-height: 520px) {
+  #app {
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas: "head" "stage" "left" "right";
+    height: auto;
+  }
+  main.stage { min-height: 520px; }
+  #rail-left, #rail-right {
+    position: static; height: auto;
+    transform: none; visibility: visible;
+    border-top: 1px solid var(--line-2); box-shadow: none;
+  }
+  .sheet-open, .sheet-close, .sheet-scrim { display: none; }
+  .tabs { top: 0; }
+  /* A sheet opened in portrait must not leave the page locked after a rotate. */
+  html[data-sheet], html[data-sheet] body { overflow: visible; }
+}
+
+@media (max-width: 820px) and (prefers-reduced-motion: reduce) {
+  #rail-left, #rail-right, .sheet-scrim { transition-duration: 0.01ms; }
+}
+
 @media (max-width: 560px) {
   :root { --pad: var(--s3); }
   .logo { height: 14px; }
   .live .live-txt { display: none; }
-  .specimen { flex-wrap: wrap; gap: var(--s2); }
-  .specimen-lab { padding-top: 0; }
-  .specimen-in { flex-basis: 100%; font-size: 15px; }
-  .specimen-help { display: none; }
   .dock { gap: var(--s2); padding: var(--s2); bottom: var(--s3); }
   .dock #brush-slot { width: 62px; }
   .dock .lab { display: none; }
-  .canvas-wrap { padding: var(--s3) var(--s3) 74px; }
+  .canvas-wrap { padding: var(--s3) var(--s3) 78px; }
   .foot-top { grid-template-columns: 1fr; gap: var(--s5); padding: var(--s6) var(--pad) var(--s5); }
   .foot-lede { grid-column: auto; }
 }
 
 /* Fingers need a bigger target than an 11 px square. */
 @media (pointer: coarse) {
+  /* The handle is the sheet's dismiss control; 31px is under the touch minimum. */
+  :root { --grip-h: 44px; }
   .sl { height: 32px; }
   .sl-thumb { width: 15px; height: 15px; }
   .tool span, .seg-opt span { padding: 10px var(--s3); }
@@ -945,35 +1113,6 @@ html[data-perf="low"] .pane:not([hidden]) { animation: none; }
 }
 .tour-nav { margin-left: auto; display: flex; gap: var(--s1); }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   NARROW-SCREEN NOTICE
-   ═══════════════════════════════════════════════════════════════════════════ */
-.deskbar {
-  display: flex; align-items: center; gap: var(--s3);
-  padding: var(--s3) var(--s4);
-  background: var(--acid); border-bottom: 1px solid var(--ink);
-}
-.deskbar p { margin: 0; font-size: 10.5px; line-height: 1.5; color: var(--ink); }
-.deskbar-x {
-  appearance: none; margin-left: auto; flex: none;
-  width: 26px; height: 26px; line-height: 1;
-  background: none; border: 1px solid var(--ink); color: var(--ink);
-  font-size: 15px; cursor: pointer;
-  transition: transform var(--fast) var(--ease-out);
-}
-.deskbar-x:active { transform: scale(0.94); }
-/* No fill mode: a filled animation would hold its end value over the exit
-   transition and the bar would blink out instead of leaving. */
-@keyframes desk-in { from { opacity: 0; transform: translateY(-100%); } }
-.deskbar { animation: desk-in 320ms var(--ease-out); }
-.deskbar.is-out {
-  opacity: 0; transform: translateY(-100%);
-  transition: opacity 260ms var(--ease-out), transform 260ms var(--ease-out);
-}
-@media (prefers-reduced-motion: reduce) {
-  .deskbar { animation: none; }
-  .deskbar.is-out { transition-duration: 0.01ms; transform: none; }
-}
 .foot-desk { margin-top: var(--s3) !important; color: var(--ink-3) !important; font-size: 10.5px !important; }
 
 /* ══════════════════════════════════════════════════════════════════════════

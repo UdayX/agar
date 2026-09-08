@@ -66,17 +66,12 @@
       <p class="boot-cap">Plating</p>
       <p class="boot-pct">000</p>
     </div>
-    <p class="boot-desk">Best experienced on a desktop — the plate wants room, and a pointer.</p>
+    <p class="boot-desk">A plate, nine organisms, and your letterforms as the medium.</p>
   </div>
 </div>
 <p class="visually-hidden" role="status">Loading AGAR</p>
 
 <a class="skip" href="#stage">Skip to the culture plate</a>
-
-<div class="deskbar" id="deskbar" hidden>
-  <p>AGAR is best on a desktop. It works here, but the plate is small and the tools want a pointer.</p>
-  <button class="deskbar-x" id="deskbar-x" type="button" aria-label="Dismiss">×</button>
-</div>
 
 <div id="app">
   <header class="bar">
@@ -104,6 +99,10 @@
   </header>
 
   <aside class="rail" id="rail-left" aria-label="Experiments and parameters">
+    <button class="sheet-close" type="button" data-closes="left">
+      <span class="sheet-grip" aria-hidden="true"></span>
+      <span class="visually-hidden">Close setup</span>
+    </button>
     <div class="tabs" role="tablist" aria-label="Parameter groups">
       <button class="tab" role="tab" id="tab-start" aria-controls="pane-start" aria-selected="true">Start</button>
       <button class="tab" role="tab" id="tab-organism" aria-controls="pane-organism" aria-selected="false">Organism</button>
@@ -217,10 +216,22 @@
         <div class="scrub" id="rate-slot"></div>
         <output id="rate-out">25 min/s</output>
       </div>
+
+      <!-- The two rails are columns on a desktop and sheets on a phone. These
+           open them there, and are display:none anywhere they are already
+           on screen, so nothing is ever offered twice. -->
+      <button class="btn sheet-open" id="btn-sheet-left" type="button"
+              aria-expanded="false" aria-controls="rail-left">Setup</button>
+      <button class="btn sheet-open" id="btn-sheet-right" type="button"
+              aria-expanded="false" aria-controls="rail-right">Data</button>
     </div>
   </main>
 
   <aside class="rail" id="rail-right" aria-label="Instruments and output">
+    <button class="sheet-close" type="button" data-closes="right">
+      <span class="sheet-grip" aria-hidden="true"></span>
+      <span class="visually-hidden">Close data</span>
+    </button>
     <div class="tabs" role="tablist" aria-label="Instruments">
       <button class="tab" role="tab" id="tab-curves" aria-controls="pane-curves" aria-selected="true">Curves</button>
       <button class="tab" role="tab" id="tab-export" aria-controls="pane-export" aria-selected="false">Export</button>
@@ -302,6 +313,8 @@
       <p class="note">Set from your machine on load, and stepped down on its own if frames start dropping. Lower tiers cap the cell count and coarsen the dither grid; the biology is unchanged.</p>
     </div>
   </aside>
+
+  <div class="sheet-scrim" id="sheet-scrim"></div>
 </div>
 
 <!-- The story sits after the instrument, not in front of it. Anyone who came to
