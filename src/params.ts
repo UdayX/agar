@@ -449,6 +449,34 @@ const ONE_OF = new Map<string, Set<string>>([
 ]);
 
 /** Take only what is recognisably ours, by key *and* by value. */
+/* ── the share payload ──────────────────────────────────────────────────────
+   One encoding, three readers: the share link, the embed page, and anything
+   pasted between them. It lives here rather than with the exporters because
+   the embed needs to read a payload and has no business shipping a WebM
+   recorder to do it.
+
+   Only what differs from the defaults is sent, so a link stays short and an
+   old one keeps working: a parameter this build has never heard of is dropped
+   by the check below, and the default takes its place. */
+
+/** The fragment for a setup: the diff against the defaults, base64. */
+export function payload(p: Params): string {
+  const diff: Record<string, unknown> = {};
+  for (const k of Object.keys(defaults) as (keyof Params)[]) {
+    if (p[k] !== defaults[k]) diff[k] = p[k];
+  }
+  return `#p=${btoa(unescape(encodeURIComponent(JSON.stringify(diff))))}`;
+}
+
+/** The setup in this page's own fragment, checked. */
+export function readURL(): Partial<Params> | null {
+  const m = /#p=(.+)$/.exec(location.hash);
+  if (!m) return null;
+  try {
+    return coerceParams(JSON.parse(decodeURIComponent(escape(atob(m[1])))));
+  } catch { return null; }
+}
+
 export function coerceParams(src: unknown): Partial<Params> {
   if (!src || typeof src !== 'object') return {};
   const raw = src as Record<string, unknown>;

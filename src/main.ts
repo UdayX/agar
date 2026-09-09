@@ -1,6 +1,6 @@
 /** AGAR — wiring. */
 import './style.css';
-import { coerceParams, defaults, PRESETS, SPECIES, speciesById, type Mode, type Params } from './params';
+import { coerceParams, defaults, PRESETS, readURL, SPECIES, speciesById, type Mode, type Params } from './params';
 import { Sim, DEAD } from './sim';
 import { Renderer, hexToRGB } from './render';
 import { buildControls, buildOrganisms, buildPresets, buildReadout, buildThemes, buildTools, buildMilestones, renderLog } from './ui';
@@ -17,7 +17,7 @@ import logoUrl from './AgarLogo.svg';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-const P: Params = { ...defaults, ...(X.readURL() ?? {}) };
+const P: Params = { ...defaults, ...(readURL() ?? {}) };
 
 const canvas = $<HTMLCanvasElement>('plate');
 const renderer = new Renderer(canvas);
@@ -528,6 +528,43 @@ $('btn-share').addEventListener('click', async (e) => {
   }
 });
 
+// ── embed ────────────────────────────────────────────────────────────────
+// Somebody else's page gets an iframe, not a package: no build to inherit, no
+// React version to match, and an origin boundary around the canvas work.
+const embedBox = $<HTMLTextAreaElement>('embed-code');
+const emReact = $<HTMLButtonElement>('em-react');
+const emHTML = $<HTMLButtonElement>('em-html');
+let embedKind: 'react' | 'html' = 'react';
+
+function syncEmbed(): void {
+  embedBox.value = X.embedSnippet(P, embedKind);
+  emReact.setAttribute('aria-pressed', String(embedKind === 'react'));
+  emHTML.setAttribute('aria-pressed', String(embedKind === 'html'));
+  $<HTMLAnchorElement>('em-open').href = X.embedURL(P);
+}
+
+embedBox.addEventListener('focus', syncEmbed);
+
+for (const [btn, kind] of [[emReact, 'react'], [emHTML, 'html']] as const) {
+  btn.addEventListener('click', () => { embedKind = kind; syncEmbed(); });
+}
+
+$('em-copy').addEventListener('click', async (e) => {
+  const btn = e.currentTarget as HTMLButtonElement;
+  // Regenerated at the moment of copying, so what lands on the clipboard is the
+  // plate as it stands and not as it stood when the tab was opened.
+  syncEmbed();
+  try {
+    await navigator.clipboard.writeText(embedBox.value);
+    say(`${embedKind === 'react' ? 'React component' : 'HTML snippet'} copied to the clipboard.`);
+    confirmOn(btn, 'Copied');
+  } catch {
+    embedBox.select();
+    say('The clipboard is blocked here. The snippet is selected — copy it with the keyboard.');
+    confirmOn(btn, 'Selected');
+  }
+});
+
 // ── leaving a culture to grow ────────────────────────────────────────────
 const STORE = 'agar.culture.v1';
 
@@ -723,6 +760,8 @@ function wireTabs(rail: HTMLElement): void {
     // Sliders inside the pane that just appeared have only now been given a
     // width, so their handles have to be placed again.
     reflowAll();
+    // The snippet is only worth regenerating when it is about to be read.
+    if (document.getElementById('pane-export')?.hidden === false) syncEmbed();
     if (focus) tab.focus();
   };
 
@@ -939,6 +978,7 @@ applySpecies(P.species);
 syncTools(P.tool);
 setMode(P.mode, false);
 panel.sync();
+syncEmbed();
 resetSim();
 panel.reflow();
 rate.reflow();

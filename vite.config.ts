@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         learn: fileURLToPath(new URL('./learn.html', import.meta.url)),
+        embed: fileURLToPath(new URL('./embed.html', import.meta.url)),
         attributions: fileURLToPath(new URL('./attributions.html', import.meta.url)),
       },
     },

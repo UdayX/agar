@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- Same policy as the lab. This page is meant to be framed by strangers, so
+     it is the one page here that must be provably unable to reach off-origin;
+     frame-ancestors is ignored in meta form, and GitHub Pages serves no
+     headers we control, so framing itself is open by design. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'" />
+<title>AGAR — live culture</title>
+<meta name="description" content="An embedded AGAR culture: simulated microorganisms growing on letterforms." />
+<meta name="robots" content="noindex" />
+</head>
+<body>
+<canvas id="plate" aria-label="A live simulated microbial culture growing on letterforms."></canvas>
+<!-- Shown until the first frame is drawn, and removed by the module at that
+     moment. It covers scripts being off and, just as importantly, the module
+     never running at all: a host content policy that blocks this frame would
+     otherwise leave a blank rectangle with nothing to explain it. -->
+<p class="fallback" id="fallback">
+  A live culture simulation — it needs JavaScript to grow.
+  <a href="./" target="_blank" rel="noopener noreferrer">Open AGAR<span class="visually-hidden"> (opens in a new tab)</span></a>
+</p>
+<a class="mark" href="./" target="_blank" rel="noopener noreferrer">Agar<span class="visually-hidden"> — open the full lab in a new tab</span></a>
+<script type="module" src="/src/embed.ts"></script>
+</body>
+</html>

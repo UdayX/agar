@@ -1,6 +1,6 @@
 /** Getting work out: still, vector, motion, data, and the parameters themselves. */
 import type { Params } from './params';
-import { coerceParams, defaults, speciesById } from './params';
+import { coerceParams, payload, speciesById } from './params';
 import { hexToRGB } from './render';
 import { DEAD, SENESCENT, type Sim } from './sim';
 
@@ -86,22 +86,62 @@ export async function importPreset(file: File): Promise<Partial<Params>> {
   return coerceParams(json?.params ?? json);
 }
 
-/** Share link: only the parameters that differ from the defaults. */
+/** Share link: this page, this setup. */
 export function shareURL(p: Params): string {
-  const diff: Record<string, unknown> = {};
-  for (const k of Object.keys(defaults) as (keyof Params)[]) {
-    if (p[k] !== defaults[k]) diff[k] = p[k];
-  }
-  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(diff))));
-  return `${location.origin}${location.pathname}#p=${b64}`;
+  return `${location.origin}${location.pathname}${payload(p)}`;
 }
 
-export function readURL(): Partial<Params> | null {
-  const m = /#p=(.+)$/.exec(location.hash);
-  if (!m) return null;
-  try {
-    return coerceParams(JSON.parse(decodeURIComponent(escape(atob(m[1])))));
-  } catch { return null; }
+/** The same setup, on the chrome-less page built to be framed. */
+export function embedURL(p: Params): string {
+  const dir = location.pathname.replace(/[^/]*$/, '');
+  return `${location.origin}${dir}embed.html${payload(p)}`;
+}
+
+/**
+ * Something to paste. Both snippets frame the embed page rather than shipping
+ * the simulation as a package: there is no build step to inherit, no React
+ * version to match, and the host page gets a real origin boundary around a few
+ * thousand lines of canvas work.
+ *
+ * `sandbox` narrows what the frame may do to the page around it: no forms, no
+ * plugins, and above all no top-level navigation, so an embed can never
+ * redirect the page it sits on. `allow-popups` is there so the corner mark can
+ * still open the lab in a new tab, which is the only reason anyone embeds this.
+ *
+ * `allow-same-origin` is not a hole here and cannot be dropped. It hands the
+ * frame back its real origin — the frame is already cross-origin to the host,
+ * so it gains nothing over the host by having one. Without it the origin is
+ * opaque, and an opaque origin matches no `'self'` in this page's own
+ * content-security policy: the page ends up unable to load its own bundle.
+ * Measured rather than assumed — a frame sandboxed without it rendered nothing
+ * at all, while the same frame with it runs normally.
+ */
+export function embedSnippet(p: Params, kind: 'react' | 'html'): string {
+  const url = embedURL(p);
+  const title = 'AGAR — a live simulated microbial culture';
+  if (kind === 'html') {
+    return `<iframe
+  src="${url}"
+  title="${title}"
+  width="100%"
+  height="420"
+  loading="lazy"
+  sandbox="allow-scripts allow-same-origin allow-popups"
+  style="border:0;display:block"
+></iframe>`;
+  }
+  return `export function AgarCulture({ height = 420 }) {
+  return (
+    <iframe
+      src="${url}"
+      title="${title}"
+      height={height}
+      loading="lazy"
+      sandbox="allow-scripts allow-same-origin allow-popups"
+      style={{ width: "100%", border: 0, display: "block" }}
+    />
+  );
+}`;
 }
 
 export class Recorder {

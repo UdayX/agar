@@ -293,6 +293,19 @@
         <button class="btn" id="ex-load" type="button">Load preset</button>
       </div>
       <input type="file" id="preset-file" accept="application/json,.json" class="visually-hidden" />
+
+      <h2 class="pane-h">Embed</h2>
+      <p class="note">Put this culture on your own site. The snippet frames a page here — nothing to install, nothing uploaded, and it carries whatever setup you have open right now.</p>
+      <div class="btn-row" role="group" aria-label="Snippet format">
+        <button class="btn" id="em-react" type="button" aria-pressed="true">React</button>
+        <button class="btn" id="em-html" type="button" aria-pressed="false">Plain HTML</button>
+      </div>
+      <label class="visually-hidden" for="embed-code">Embed snippet</label>
+      <textarea class="code" id="embed-code" rows="12" readonly spellcheck="false" wrap="off"></textarea>
+      <div class="btn-row">
+        <button class="btn" id="em-copy" type="button">Copy snippet</button>
+        <a class="btn ghost" id="em-open" href="embed.html" target="_blank" rel="noopener noreferrer">Preview</a>
+      </div>
     </div>
 
     <div class="pane" role="tabpanel" id="pane-log" aria-labelledby="tab-log" tabindex="0" hidden>
