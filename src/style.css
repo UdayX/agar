@@ -639,6 +639,14 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
   transition: transform var(--med) var(--ease-out);
 }
 
+/* A borrowed mark in a greyscale footer. It stays inline so the link keeps its
+   block layout and its growing underline, and it is held back at rest so the
+   one red pixel in it never competes with the acid plate below. */
+.foot-badge img {
+  height: 28px; width: auto; vertical-align: middle; margin-left: 4px;
+  opacity: .72; transition: opacity var(--fast) ease;
+}
+
 /* The live plate. Acid ground, black cells, and the wordmark as the thing they
    are growing into — the same simulation as the tool, left running. */
 .foot-plate { background: var(--acid); border-block: 1px solid var(--ink); }
@@ -942,6 +950,7 @@ kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2)
   .file-drop:hover { border-color: var(--ink-3); }
   input:hover, textarea:not(.specimen-in):hover, select:hover, input.swatch:hover { border-color: var(--ink); }
   .foot-col a:hover::after { transform: scaleX(1); }
+  .foot-badge:hover img { opacity: 1; }
   .foot-meta a:hover, .doc-foot a:hover { color: var(--ink); border-bottom-color: var(--ink); }
   .doc-back:hover { color: var(--ink-3); }
 }
